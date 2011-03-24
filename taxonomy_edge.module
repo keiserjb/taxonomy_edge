@@ -13,7 +13,7 @@
  * SELECT tid FROM {term_edge} WHERE parent = 14
  *
  * NOTE: Multiple parents are somewhat supported
- * 
+ *
  * @todo Cleanup installation file
  * @todo Refactor administration and move to separate file
  * @todo Finish or remove taxonomy_edge_get_tree()
