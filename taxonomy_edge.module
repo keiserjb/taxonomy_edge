@@ -59,7 +59,11 @@ function taxonomy_edge_settings_form() {
   );
 
   // Save all button
-  $form['submit'] = array('#type' => 'submit', '#name' => 'submit_all', '#value' => t('Save configuration') );
+  $form['submit'] = array(
+    '#type' => 'submit', 
+    '#name' => 'submit_all', 
+    '#value' => t('Save configuration'),
+  );
 
   return $form;
 }
@@ -107,7 +111,9 @@ function taxonomy_edge_taxonomy($op, $type, $object = NULL) {
  * Insert edges for a term
  */
 function _taxonomy_edge_insert($tid, $parents) {
-  if (!is_array($parents)) $parents = array($parents);
+  if (!is_array($parents)) {
+    $parents = array($parents);
+  }
 
   watchdog('taxonomy_edge', 'Inserting taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
 
@@ -134,7 +140,9 @@ function _taxonomy_edge_insert($tid, $parents) {
  * Move term in the edge list
  */
 function _taxonomy_edge_update($tid, $parents) {
-  if (!is_array($parents)) $parents = array($parents);
+  if (!is_array($parents)) {
+    $parents = array($parents);
+  }
 
   watchdog('taxonomy_edge', 'Updating taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
 
@@ -208,13 +216,17 @@ function taxonomy_edge_rebuild($max_depth = TAXONOMY_EDGE_MAX_DEPTH) {
       AND h.tid != h.parent
     ", $depth + 1, $depth);
 
-    if (!$result) break;
+    if (!$result) {
+      break;
+    }
     $depth++;
 
     $rows = db_affected_rows();
     $total_rows += $rows;
     watchdog('taxonomy_edge', 'Depth: %depth - Rows: %rows (%total_rows)', array('%depth' => $depth, '%rows' => $rows, '%total_rows' => $total_rows), WATCHDOG_DEBUG);
-    if ($rows <= 0) break;
+    if ($rows <= 0) {
+      break;
+    }
   }
 
   db_end_transaction();
