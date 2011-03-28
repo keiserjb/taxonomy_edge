@@ -16,8 +16,6 @@
  *
  * @todo Cleanup installation file
  * @todo Refactor administration and move to separate file
- * @todo Finish or remove taxonomy_edge_get_tree()
- * @todo Finish or remove taxonomy_edge_select_nodes()
  */
 
 define('TAXONOMY_EDGE_MAX_DEPTH', variable_get('taxonomy_edge_max_depth', 100));
@@ -272,6 +270,9 @@ function taxonomy_edge_cronapi($op, $job = NULL) {
   }
 }
 
+/**
+ * Rebuild edges
+ */
 function taxonomy_edge_rebuild_cron() {
   $rows = taxonomy_edge_rebuild();
   if (is_numeric($rows)) {
@@ -281,89 +282,6 @@ function taxonomy_edge_rebuild_cron() {
     return FALSE;
   }
 }
-
-/**
- * Reimplementation of taxonomy_get_tree().
- *
- * INCOMPLETE
- */
-function taxonomy_edge_get_tree($vid, $parent = 0, $depth = -1) {
-  $select = "
-    SELECT td.*,
-    (
-      SELECT GROUP_CONCAT(td2.weight+1500, '/', td2.name ORDER BY tx2.tid SEPARATOR '/')
-      FROM term_data td2
-      JOIN term_hierarchy th2 ON td2.tid = th2.tid
-      JOIN term_edge tx2 ON th2.tid = tx2.parent
-      WHERE tx2.tid = th.tid
-    ) AS path
-  ";
-  $from = " FROM term_hierarchy th ";
-  $join  = " INNER JOIN term_edge tx ON th.tid = tx.tid ";
-  $join .= " INNER JOIN term_data td ON tx.tid = td.tid ";
-  $where  = " WHERE tx.parent = %d ";
-  $where .= " AND td.vid = %d ";
-  $order = " ORDER BY path ";
-
-  $args = array();
-  $args[] = $parent;
-  $args[] = $vid;
-
-  if ($depth >= 0 ) {
-    $where .= " AND tx.depth < %d ";
-    $args[] = $depth;
-  }
-
-  $sql = $select . $from . $join . $where . $order;
-
-  $terms = array();
-  $result = db_query($sql, $args);
-  while ($term = db_fetch_object($result)) {
-    $terms[] = $term;
-  }
-  return $terms;
-}
-
-/**
- * Reimplementation of taxonomy_select_nodes().
- *
- * INCOMPLETE
- */
-function taxonomy_edge_select_nodes($tids = array(), $operator = 'or', $depth = 0, $pager = TRUE, $order = 'n.sticky DESC, n.created DESC') {
-  $args = array();
-
-  $select = "SELECT DISTINCT(n.nid), n.sticky, n.title, n.created ";
-  $from = " FROM {node} n ";
-  $join = " INNER JOIN {term_node} tn ON n.vid = tn.vid ";
-  $join .= " INNER JOIN {term_data} td ON tn.tid = td.tid ";
-  $join .= " INNER JOIN {term_edge} tx ON td.tid = tx.tid ";
-  $join .= " INNER JOIN {term_hierarchy} th ON tx.tid = th.tid ";
-  $where  = " WHERE tx.parent IN ($placeholders) ";
-  $where .= " AND td.vid = %d ";
-  $args = $tids;
-  $args[] = $vid;
-
-  $where .= " AND n.status = %d ";
-  $args[] = 1;
-
-  $order = " ORDER BY path ";
-
-  if ($depth >= 0 ) {
-    $where .= " AND tx.depth < %d ";
-    $args[] = $depth;
-  }
-
-  $sql = $select . $from . $join . $where . $order;
-
-  $terms = array();
-  $result = db_query($sql, $args);
-  while ($term = db_fetch_object($result)) {
-    $terms[] = $term;
-  }
-  return $terms;
-
-}
-
 
 /**
  * Compatibility for non-transactional drupal implementations
@@ -379,3 +297,4 @@ if (!function_exists('db_end_transaction')) {
     return TRUE;
   }
 }
+
