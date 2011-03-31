@@ -1,12 +1,11 @@
 <?php
 /**
- * Thomas Gielfeldt <thomas@gielfeldt.com>
- * Copyright 2008-2011 Berlingske Media A/S
- *
  * @file
  *
  * Selecting all children of a given taxonomy term can be a pain.
  * This module makes it easier by implementing an "id path" for each term.
+ *
+ * Currently only MySQL is supported
  *
  * Example of getting all children from tid:14
  *
@@ -78,7 +77,7 @@ function taxonomy_edge_settings_form_submit($form_id, &$form_state) {
     $end = microtime(TRUE);
     $time = $end - $start;
     if (is_numeric($rows)) {
-      drupal_set_message(t('Taxonomy edges rebuilded: %rows processed took %time seconds', array('%rows' => $rows, '%time' => $time)));
+      drupal_set_message(t('Taxonomy edges rebuilt: %rows processed took %time seconds', array('%rows' => $rows, '%time' => $time)));
     }
     else {
       drupal_set_message(t('Taxonomy edges rebuilded: FAILED'), 'error');
