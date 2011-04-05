@@ -1,8 +1,5 @@
 <?php
 /**
- * Thomas Gielfeldt <thomas@gielfeldt.com>
- * Copyright 2008-2011 Berlingske Media A/S
- *
  * @file
  *
  * Installation file for Taxonomy Edge
@@ -23,8 +20,16 @@ function taxonomy_edge_install() {
 function taxonomy_edge_uninstall() {
   // Remove tables.
   drupal_uninstall_schema('taxonomy_edge');
+  _taxonomy_edge_uninstall();
 }
 
+/**
+ * Implementation of hook_enable().
+ */
+function taxonomy_edge_enable() {
+  // Rebuild the edge list when module is enabled
+  taxonomy_edge_rebuild();
+}
 
 /**
  * Implementation of hook_schema().
@@ -81,16 +86,16 @@ function _taxonomy_edge_install() {
   // Taxonomy-terms with no parents will have NULL as top_tid
   // Use IF(top_tid IS NULL, tid, top_tid) AS top_tid in query to get tid as top-tid if no parent
   $sql = <<<SQL
-CREATE VIEW views_term_top_tid AS
+CREATE VIEW {views_term_top_tid} AS
 SELECT te.tid,
 (
   SELECT te2.parent
-  FROM term_edge te2
+  FROM {term_edge} te2
   WHERE te2.tid = te.tid
-  AND te2.depth != 0
+  AND te2.depth <> 0
   ORDER BY te2.depth DESC LIMIT 1
 ) AS top_tid
-FROM term_edge te
+FROM {term_edge} te
 WHERE te.depth = 0
 SQL;
 
@@ -99,26 +104,26 @@ SQL;
   // This creates a view with the materialized path for each taxonomy-term.
   // ORDER BY sort_path to get correct order of paths
   $sql = <<<SQL
-CREATE VIEW views_term_materialized_path AS
+CREATE VIEW {views_term_materialized_path} AS
 SELECT
   te.tid,
   (
     SELECT GROUP_CONCAT(td2.name ORDER BY te2.depth DESC SEPARATOR '/') AS path
-    FROM term_data td2
-    INNER JOIN term_edge te2 ON td2.tid = te2.parent
+    FROM {term_data} td2
+    INNER JOIN {term_edge} te2 ON td2.tid = te2.parent
     WHERE
     te2.tid = te.tid
   ) AS path,
   (
     SELECT GROUP_CONCAT(td2.weight+1500, '/', td2.name ORDER BY te2.depth DESC SEPARATOR '/') AS sort_path
-    FROM term_data td2
-    INNER JOIN term_edge te2 ON td2.tid = te2.parent
+    FROM {term_data} td2
+    INNER JOIN {term_edge} te2 ON td2.tid = te2.parent
     WHERE
     te2.tid = te.tid
   ) AS sort_path
 FROM
-term_edge te
-INNER JOIN term_data td ON te.tid = td.tid
+{term_edge} te
+INNER JOIN {term_data} td ON te.tid = td.tid
 WHERE te.depth = 0
 SQL;
 
@@ -127,104 +132,9 @@ SQL;
   return $ret;
 }
 
-function taxonomy_edge_update_6001() {
+function _taxonomy_edge_uninstall() {
   $ret = array();
-
-  // This creates a view with the materialized path for each taxonomy-term.
-  // ORDER BY sort_path to get correct order of paths
-  $sql = <<<SQL
-CREATE VIEW views_term_materialized_path AS
-SELECT
-  te.tid,
-  (
-    SELECT GROUP_CONCAT(td2.name ORDER BY te2.depth DESC SEPARATOR '/')
-    FROM term_data td2
-    INNER JOIN term_edge te2 ON td2.tid = te2.parent
-    WHERE
-    te2.tid = te.tid
-  ) AS path,
-  (
-    SELECT GROUP_CONCAT(td2.weight+1500, '/', td2.name ORDER BY te2.depth DESC SEPARATOR '/')
-    FROM term_data td2
-    INNER JOIN term_edge te2 ON td2.tid = te2.parent
-    WHERE
-    te2.tid = te.tid
-  ) AS sort_path
-FROM
-term_edge te
-INNER JOIN term_data td ON te.tid = td.tid
-WHERE te.depth = 0
-SQL;
-
-  $ret[] = update_sql($sql);
-
-  // This creates a view with the top-level taxonomy term-id for each taxonomy-term
-  // Taxonomy-terms with no parents will have NULL as top_tid
-  // Use IF(top_tid IS NULL, tid, top_tid) AS top_tid in query to get tid as top-tid if no parent
-  $sql = <<<SQL
-CREATE VIEW views_term_top_tid AS
-SELECT te.tid,
-(
-  SELECT te2.parent
-  FROM term_edge te2
-  WHERE te2.tid = te.tid
-  AND te2.depth != 0
-  ORDER BY te2.depth DESC LIMIT 1
-) AS top_tid
-FROM term_edge te
-WHERE te.depth = 0
-SQL;
-
-  $ret[] = update_sql($sql);
-
-  return $ret;
-}
-
-function taxonomy_edge_update_6102() {
-  $ret = array();
-
-  // This creates a view with the materialized path for each taxonomy-term.
-  // ORDER BY sort_path to get correct order of paths
-  db_query("DROP VIEW views_term_materialized_path");
-  $sql = <<<SQL
-CREATE VIEW views_term_materialized_path AS
-SELECT
-  te.tid,
-  (
-    SELECT GROUP_CONCAT(td2.name ORDER BY te2.depth DESC SEPARATOR '/') AS path
-    FROM term_data td2
-    INNER JOIN term_edge te2 ON td2.tid = te2.parent
-    WHERE
-    te2.tid = te.tid
-  ) AS path,
-  (
-    SELECT GROUP_CONCAT(td2.weight+1500, '/', td2.name ORDER BY te2.depth DESC SEPARATOR '/') AS sort_path
-    FROM term_data td2
-    INNER JOIN term_edge te2 ON td2.tid = te2.parent
-    WHERE
-    te2.tid = te.tid
-  ) AS sort_path
-FROM
-term_edge te
-INNER JOIN term_data td ON te.tid = td.tid
-WHERE te.depth = 0
-SQL;
-
-  $ret[] = update_sql($sql);
-
-  return $ret;
-}
-
-function taxonomy_edge_update_6103() {
-  $ret = array();
-
-  // We need the IGNORE statement on the alter table to eliminate duplicate rows
-  // The api doesn't support this, so we'll create it ourselves.
-  $table = 'term_edge';
-  $name = 'idx_highlander';
-  $fields = array('tid', 'parent');
-  $ret[] = update_sql('ALTER IGNORE TABLE {'. $table .'} ADD UNIQUE KEY '.
-    $name .' ('. _db_create_key_sql($fields) .')');
-
+  $ret[] = update_sql("DROP VIEW {views_term_top_tid}");
+  $ret[] = update_sql("DROP VIEW {views_term_materialized_path}");
   return $ret;
 }

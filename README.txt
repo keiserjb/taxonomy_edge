@@ -23,3 +23,6 @@ Maintenance
 -----------
 Rebuild edges from /admin/content/taxonomy/edge
 
+Edges can also be rebuild through cron if a hook_cronapi() compatible cron module is installed (Elysia Cron, Parallel Cron, etc.)
+
+Rebuilding of edges can be necessary if the table gets out of sync.
