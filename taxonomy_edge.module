@@ -13,8 +13,8 @@
  *
  * NOTE: Multiple parents are somewhat supported
  *
- * @todo Cleanup installation file
  * @todo Refactor administration and move to separate file
+ * @todo Use batch API for rebuild edges manually
  */
 
 define('TAXONOMY_EDGE_MAX_DEPTH', variable_get('taxonomy_edge_max_depth', 100));
@@ -136,7 +136,9 @@ function _taxonomy_edge_insert($tid, $parents) {
   watchdog('taxonomy_edge', 'Inserting taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
 
   if ($tid > 0) {
-    db_start_transaction();
+    if (function_exists('db_start_transaction')) {
+      db_start_transaction();
+    }
 
     db_query("INSERT IGNORE INTO {term_edge} (tid, parent, depth) VALUES(%d, %d, 0)", $tid, $tid);
     $rows += db_affected_rows();
@@ -145,7 +147,9 @@ function _taxonomy_edge_insert($tid, $parents) {
       db_query("INSERT IGNORE INTO {term_edge} (tid, parent, depth) SELECT %d, parent, depth + 1 FROM term_edge WHERE tid = %d", $tid, $parent);
       $rows += db_affected_rows();
     }
-    db_end_transaction();
+    if (function_exists('db_end_transaction')) {
+      db_end_transaction();
+    }
     return $rows;
   }
   else {
@@ -169,7 +173,9 @@ function _taxonomy_edge_update($tid, $parents) {
 
   watchdog('taxonomy_edge', 'Updating taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
 
-  db_start_transaction();
+  if (function_exists('db_start_transaction')) {
+    db_start_transaction();
+  }
 
   // Find invalid edges after move
   db_query("CREATE TEMPORARY TABLE {term_edge_delete} (id INT(11) PRIMARY KEY)");
@@ -201,7 +207,9 @@ function _taxonomy_edge_update($tid, $parents) {
   // Clean up
   db_query("DROP TEMPORARY TABLE {term_edge_delete}");
 
-  db_end_transaction();
+  if (function_exists('db_end_transaction')) {
+    db_end_transaction();
+  }
 }
 
 /**
@@ -230,7 +238,9 @@ function taxonomy_edge_rebuild($max_depth = TAXONOMY_EDGE_MAX_DEPTH) {
 
   watchdog('taxonomy_edge', 'Rebuilding edges', array(), WATCHDOG_DEBUG);
 
-  db_start_transaction();
+  if (function_exists('db_start_transaction')) {
+    db_start_transaction();
+  }
   db_query("DELETE FROM {term_edge}");
   db_query("INSERT IGNORE INTO {term_edge} (tid, parent, depth) SELECT tid, tid, 0 FROM {term_hierarchy} WHERE tid != 0 AND tid != parent");
   $total_rows = db_affected_rows();
@@ -260,7 +270,9 @@ function taxonomy_edge_rebuild($max_depth = TAXONOMY_EDGE_MAX_DEPTH) {
     }
   }
 
-  db_end_transaction();
+  if (function_exists('db_end_transaction')) {
+    db_end_transaction();
+  }
   return $total_rows;
 }
 
@@ -318,27 +330,3 @@ function taxonomy_edge_rebuild_cron() {
     return FALSE;
   }
 }
-
-/**
- * Compatibility for non-transactional drupal implementations
- */
-if (!function_exists('db_start_transaction')) {
-  /**
-   * Dummy function for transactions
-   * @return boolean
-   */
-  function db_start_transaction() {
-    return TRUE;
-  }
-}
-
-if (!function_exists('db_end_transaction')) {
-  /**
-   * Dummy function for transactions
-   * @return boolean
-   */
-  function db_end_transaction($commit = TRUE) {
-    return TRUE;
-  }
-}
-
