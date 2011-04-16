@@ -145,11 +145,18 @@ function _taxonomy_edge_insert($tid, $parents) {
       db_start_transaction();
     }
 
-    db_query("INSERT IGNORE INTO {term_edge} (tid, parent, distance) VALUES(%d, %d, 0)", $tid, $tid);
+    @db_query("INSERT INTO {term_edge} (tid, parent, distance) VALUES(%d, %d, 0)", $tid, $tid);
     $rows += db_affected_rows();
 
     foreach ($parents as $parent) {
-      db_query("INSERT IGNORE INTO {term_edge} (tid, parent, distance) SELECT %d, parent, distance + 1 FROM term_edge WHERE tid = %d", $tid, $parent);
+      db_query("
+        INSERT INTO {term_edge} (tid, parent, distance)
+        SELECT %d, e1.parent, e1.distance + 1
+        FROM {term_edge} e1
+        LEFT JOIN {term_edge} e2 ON e2.tid = %d AND e2.parent = e1.parent
+        WHERE e1.tid = %d
+        AND e2.tid IS NULL
+      ", $tid, $parent);
       $rows += db_affected_rows();
     }
     if (function_exists('db_end_transaction')) {
@@ -183,14 +190,17 @@ function _taxonomy_edge_update($tid, $parents) {
   }
 
   // Find invalid edges after move
-  db_query_temporary("
-    SELECT DISTINCT tm2.tid, tm2.parent
-    FROM {term_edge} tm1
-    INNER JOIN {term_edge} tm2 ON tm1.tid = tm2.tid
-    WHERE tm1.parent = %d AND tm2.distance > tm1.distance
-  ", $tid, 'term_edge_delete');
+  db_query("CREATE TEMPORARY TABLE {term_edge_delete} (tid INT(11), parent INT(11), PRIMARY KEY (`tid`, `parent`))");
+  db_query("
+    INSERT INTO {term_edge_delete} 
+    SELECT DISTINCT te2.tid, te2.parent
+    FROM {term_edge} te1
+    INNER JOIN {term_edge} te2 ON te1.tid = te2.tid
+    WHERE te1.parent = %d AND te2.distance > te1.distance
+  ", $tid);
 
   // Delete those edges
+  // @note Don't prefix temptable!
   db_query("
     DELETE e.*
     FROM {term_edge} e
@@ -202,12 +212,16 @@ function _taxonomy_edge_update($tid, $parents) {
   $args = $parents;
   $args[] = $tid;
   db_query("
-    INSERT IGNORE INTO {term_edge} (tid, parent, distance)
-    SELECT tm2.tid, tm1.parent, tm1.distance + tm2.distance + 1
-    FROM {term_edge} tm1, {term_edge} tm2
-    WHERE tm1.tid IN (" . $placeholders . ")
-    AND tm2.parent = %d
+    INSERT INTO {term_edge} (tid, parent, distance)
+    SELECT te2.tid, te1.parent, te1.distance + te2.distance + 1
+    FROM {term_edge} te1
+    INNER JOIN {term_edge} te2 ON te1.tid IN (" . $placeholders . ") AND te2.parent = %d
+    LEFT JOIN {term_edge} te3 ON te2.tid = te3.tid AND te1.parent = te3.parent
+    WHERE te3.tid IS NULL
   ", $args);
+  
+  // Clean up
+  db_query("DROP TEMPORARY TABLE {term_edge_delete}");
 
   if (function_exists('db_end_transaction')) {
     db_end_transaction();
@@ -253,19 +267,29 @@ function taxonomy_edge_rebuild() {
     db_query("TRUNCATE {term_edge}");
   }
 
-  db_query("INSERT IGNORE INTO {term_edge} (tid, parent, distance) SELECT tid, tid, 0 FROM {term_hierarchy} WHERE tid <> 0 AND tid <> parent");
+  db_query("
+    INSERT INTO {term_edge} (tid, parent, distance) 
+    SELECT h.tid, h.tid, 0 
+    FROM {term_hierarchy} h
+    LEFT JOIN {term_edge} e ON e.tid = h.tid AND e.parent = h.tid
+    WHERE h.tid <> 0 
+    AND h.tid <> h.parent
+    AND e.tid IS NULL
+  ");
   $total_rows = db_affected_rows();
   watchdog('taxonomy_edge', 'distance: %distance - Rows: %rows (%total_rows)', array('%distance' => 0, '%rows' => $total_rows, '%total_rows' => $total_rows), WATCHDOG_DEBUG);
 
   while ($max_depth-- > 0) {
     $result = db_query("
-      INSERT IGNORE INTO {term_edge} (tid, parent, distance)
+      INSERT INTO {term_edge} (tid, parent, distance)
       SELECT h.tid, e.parent, %d
       FROM {term_hierarchy} h
       INNER JOIN {term_edge} e ON e.tid = h.parent
+      LEFT JOIN {term_edge} e2 ON e2.tid = h.tid AND e2.parent = e.parent
       WHERE e.distance = %d
       AND h.tid <> 0
       AND h.tid <> h.parent
+      AND e2.tid IS NULL
     ", $depth + 1, $depth);
 
     if (!$result) {
@@ -297,7 +321,13 @@ function taxonomy_edge_rebuild() {
  */
 function taxonomy_edge_get_parents($tid) {
   $parents = array();
-  $result = db_query("SELECT e.parent AS tid, d.name FROM {term_edge} e JOIN {term_data} d ON e.parent = d.tid WHERE e.tid = %d AND e.distance > 0 ORDER BY e.distance", $tid);
+  $result = db_query("
+    SELECT e.parent AS tid, d.name
+    FROM {term_edge} e JOIN {term_data} d ON e.parent = d.tid
+    WHERE e.tid = %d
+    AND e.distance > 0
+    ORDER BY e.distance
+  ", $tid);
   while ($parent = db_fetch_object($result)) {
     $parents[] = $parent;
   }
@@ -313,7 +343,13 @@ function taxonomy_edge_get_parents($tid) {
  *   Top term ID.
  */
 function taxonomy_edge_get_top_tid($tid) {
-  return db_result(db_query("SELECT h.tid FROM {term_edge} te INNER JOIN {term_hierarchy} h ON te.parent = h.tid WHERE h.parent = 0 AND te.tid = %d", $tid));
+  return db_result(db_query("
+    SELECT h.tid
+    FROM {term_edge} te
+    INNER JOIN {term_hierarchy} h ON te.parent = h.tid
+    WHERE h.parent = 0
+    AND te.tid = %d
+  ", $tid));
 }
 
 /**
