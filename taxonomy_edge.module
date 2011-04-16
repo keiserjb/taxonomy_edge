@@ -200,11 +200,10 @@ function _taxonomy_edge_update($tid, $parents) {
   ", $tid);
 
   // Delete those edges
-  // @note Don't prefix temptable!
   db_query("
     DELETE e.*
     FROM {term_edge} e
-    JOIN term_edge_delete ed ON e.tid = ed.tid AND e.parent = ed.parent
+    JOIN {term_edge_delete} ed ON e.tid = ed.tid AND e.parent = ed.parent
   ");
 
   // Insert new and correct edges
