@@ -188,7 +188,7 @@ function _taxonomy_edge_update($tid, $parents) {
     FROM {term_edge} tm1
     INNER JOIN {term_edge} tm2 ON tm1.tid = tm2.tid
     WHERE tm1.parent = %d AND tm2.distance > tm1.distance
-  ", $tid, 'taxonomy_edge_delete');
+  ", $tid, 'term_edge_delete');
 
   // Delete those edges
   db_query("
