@@ -1,7 +1,7 @@
 <?php
 /**
  * @file
- * 
+ *
  * Pages for taxonomy edge settings and more.
  */
 
@@ -20,7 +20,7 @@ function taxonomy_edge_settings_form() {
     '#type' => 'textfield',
     '#default_value' => variable_get('taxonomy_edge_max_depth', TAXONOMY_EDGE_MAX_DEPTH),
   );
-  
+
   $form['rebuild'] = array(
     '#type' => 'fieldset',
     '#description' => t('Rebuild entire edge list.'),

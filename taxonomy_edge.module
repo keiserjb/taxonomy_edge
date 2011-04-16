@@ -192,7 +192,7 @@ function _taxonomy_edge_update($tid, $parents) {
   // Find invalid edges after move
   db_query("CREATE TEMPORARY TABLE {term_edge_delete} (tid INT(11), parent INT(11), PRIMARY KEY (`tid`, `parent`))");
   db_query("
-    INSERT INTO {term_edge_delete} 
+    INSERT INTO {term_edge_delete}
     SELECT DISTINCT te2.tid, te2.parent
     FROM {term_edge} te1
     INNER JOIN {term_edge} te2 ON te1.tid = te2.tid
@@ -218,7 +218,7 @@ function _taxonomy_edge_update($tid, $parents) {
     LEFT JOIN {term_edge} te3 ON te2.tid = te3.tid AND te1.parent = te3.parent
     WHERE te3.tid IS NULL
   ", $args);
-  
+
   // Clean up
   db_query("DROP TEMPORARY TABLE {term_edge_delete}");
 
@@ -267,11 +267,11 @@ function taxonomy_edge_rebuild() {
   }
 
   db_query("
-    INSERT INTO {term_edge} (tid, parent, distance) 
-    SELECT h.tid, h.tid, 0 
+    INSERT INTO {term_edge} (tid, parent, distance)
+    SELECT h.tid, h.tid, 0
     FROM {term_hierarchy} h
     LEFT JOIN {term_edge} e ON e.tid = h.tid AND e.parent = h.tid
-    WHERE h.tid <> 0 
+    WHERE h.tid <> 0
     AND h.tid <> h.parent
     AND e.tid IS NULL
   ");
