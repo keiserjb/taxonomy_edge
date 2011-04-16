@@ -1,0 +1,29 @@
+From b4ac01ff946e0184db2517ec7e0c0ce29bf935e9 Mon Sep 17 00:00:00 2001
+From: Thomas Skovgaard Gielfeldt <thomas@gielfeldt.com>
+Date: Sat, 16 Apr 2011 20:54:25 +0200
+Subject: [PATCH 2/2] Patch for Taxonomy Edge override.
+
+---
+ modules/taxonomy/taxonomy.module |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+ mode change 100644 => 100755 modules/taxonomy/taxonomy.module
+
+diff --git a/modules/taxonomy/taxonomy.module b/modules/taxonomy/taxonomy.module
+old mode 100644
+new mode 100755
+index 0141120..9f25211
+--- a/modules/taxonomy/taxonomy.module
++++ b/modules/taxonomy/taxonomy.module
+@@ -1130,6 +1130,9 @@ function theme_taxonomy_term_select($element) {
+  *   A resource identifier pointing to the query results.
+  */
+ function taxonomy_select_nodes($tids = array(), $operator = 'or', $depth = 0, $pager = TRUE, $order = 'n.sticky DESC, n.created DESC') {
++  if (function_exists('taxonomy_edge_taxonomy_select_nodes')) {
++    return taxonomy_edge_taxonomy_select_nodes($tids, $operator, $depth, $pager, $order);
++  }
+   if (count($tids) > 0) {
+     // For each term ID, generate an array of descendant term IDs to the right depth.
+     $descendant_tids = array();
+-- 
+1.7.4.msysgit.0
+

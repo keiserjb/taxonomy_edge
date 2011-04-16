@@ -3,21 +3,44 @@
  * @file
  *
  * Selecting all children of a given taxonomy term can be a pain.
- * This module makes it easier by implementing an "id path" for each term.
+ * This module makes it easier to do this, by maintaining a complete list of
+ * edges for each term using the adjecency matrix graph theory.
  *
- * Currently only MySQL is supported
+ * Currently only MySQL is supported.
  *
  * Example of getting all children from tid:14
  *
  * SELECT tid FROM {term_edge} WHERE parent = 14
  *
- * NOTE: Multiple parents are somewhat supported
+ * NOTE: Multiple parents are somewhat supported.
  *
- * @todo Refactor administration and move to separate file
- * @todo Use batch API for rebuild edges manually
+ * @todo Convert to ANSI SQL (if possible) for compatibility with other databases than MySQL
+ * @todo Use batch API for rebuild edges manually.
+ * @todo Integrate with Views.
+ *
+ * @see README.txt
  */
 
-define('TAXONOMY_EDGE_MAX_DEPTH', variable_get('taxonomy_edge_max_depth', 100));
+/**
+ * Fail safe for avoiding infite loops when rebuilding edges.
+ */
+define('TAXONOMY_EDGE_MAX_DEPTH', 100);
+
+
+
+
+// ---------- HOOKS ----------
+
+/**
+ * Implements hook_help().
+ */
+function taxonomy_edge_help($section) {
+  switch ($section) {
+    case 'admin/help#taxonomy_edge':
+      // Return a line-break version of the module README.txt
+      return filter_filter('process', 1, NULL, file_get_contents( dirname(__FILE__) . "/README.txt") );
+  }
+}
 
 /**
  * Implementation of hook_perm().
@@ -34,66 +57,16 @@ function taxonomy_edge_menu() {
 
   // settings page
   $items['admin/content/taxonomy/edge'] = array(
-    'title'            => 'Edges',
+    'title'            => 'Edge',
     'description'      => 'Administer taxonomy edges',
     'page callback'    => 'drupal_get_form',
     'page arguments'   => array('taxonomy_edge_settings_form'),
     'access arguments' => array('administer taxonomy edge'),
     'type'             => MENU_LOCAL_TASK,
+    'file'             => 'taxonomy_edge.pages.inc'
   );
 
   return $items;
-}
-
-/**
- * Settings form
- *
- * FAPI definition for Taxonomy Edge settings.
- *
- * @return array
- *   FAPI definition
- */
-function taxonomy_edge_settings_form() {
-  $form = array();
-
-  $form['rebuild'] = array(
-    '#title' => t("Rebuild edges"),
-    '#type' => 'checkbox',
-    '#default_value' => FALSE,
-  );
-
-  // Save all button
-  $form['submit'] = array(
-    '#type' => 'submit',
-    '#name' => 'submit_all',
-    '#value' => t('Save configuration'),
-  );
-
-  return $form;
-}
-
-/**
- * Submit handler for settings
- *
- * @param string $form_id
- *   Form ID
- * @param array &$form_state
- *   Form state
- */
-function taxonomy_edge_settings_form_submit($form_id, &$form_state) {
-  if ($form_state['values']['rebuild']) {
-    $start = microtime(TRUE);
-    $rows = taxonomy_edge_rebuild();
-    $end = microtime(TRUE);
-    $time = $end - $start;
-    if (is_numeric($rows)) {
-      drupal_set_message(t('Taxonomy edges rebuilt: %rows processed took %time seconds', array('%rows' => $rows, '%time' => $time)));
-    }
-    else {
-      drupal_set_message(t('Taxonomy edges rebuilded: FAILED'), 'error');
-    }
-  }
-  drupal_set_message(t('Configuration saved'));
 }
 
 /**
@@ -101,208 +74,22 @@ function taxonomy_edge_settings_form_submit($form_id, &$form_state) {
  *
  * Maintain edges upon taxonomy manipulation
  */
-function taxonomy_edge_taxonomy($op, $type, $object = NULL) {
+function taxonomy_edge_taxonomy($op, $type, $array = NULL) {
+  $array = (array)$array;
   switch ($type) {
     case 'term':
       switch ($op) {
         case 'insert':
-          _taxonomy_edge_insert($object['tid'], $object['parent']);
+          _taxonomy_edge_insert($array['tid'], $array['parent']);
           break;
         case 'update':
-          _taxonomy_edge_update($object['tid'], $object['parent']);
+          _taxonomy_edge_update($array['tid'], $array['parent']);
           break;
         case 'delete':
-          _taxonomy_edge_delete($object['tid']);
+          _taxonomy_edge_delete($array['tid']);
           break;
       }
   }
-}
-
-/**
- * Insert edges for a term
- *
- * @param integer $tid
- *   Term ID
- * @param mixed $parents
- *   Parent term IDs, either one integer or an array of integers
- * @return integer/boolean
- *   Number of rows updated or FALSE if failed.
- */
-function _taxonomy_edge_insert($tid, $parents) {
-  if (!is_array($parents)) {
-    $parents = array($parents);
-  }
-
-  watchdog('taxonomy_edge', 'Inserting taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
-
-  if ($tid > 0) {
-    if (function_exists('db_start_transaction')) {
-      db_start_transaction();
-    }
-
-    db_query("INSERT IGNORE INTO {term_edge} (tid, parent, depth) VALUES(%d, %d, 0)", $tid, $tid);
-    $rows += db_affected_rows();
-
-    foreach ($parents as $parent) {
-      db_query("INSERT IGNORE INTO {term_edge} (tid, parent, depth) SELECT %d, parent, depth + 1 FROM term_edge WHERE tid = %d", $tid, $parent);
-      $rows += db_affected_rows();
-    }
-    if (function_exists('db_end_transaction')) {
-      db_end_transaction();
-    }
-    return $rows;
-  }
-  else {
-    watchdog('taxonomy_edge', 'Invalid term-id (%tid) received', array('%tid' => $tid), WATCHDOG_ERROR);
-    return FALSE;
-  }
-}
-
-/**
- * Move term in the edge list
- *
- * @param integer $tid
- *   Term ID
- * @param mixed $parents
- *   Parent term IDs, either one integer or an array of integers
- */
-function _taxonomy_edge_update($tid, $parents) {
-  if (!is_array($parents)) {
-    $parents = array($parents);
-  }
-
-  watchdog('taxonomy_edge', 'Updating taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
-
-  if (function_exists('db_start_transaction')) {
-    db_start_transaction();
-  }
-
-  // Find invalid edges after move
-  db_query("CREATE TEMPORARY TABLE {term_edge_delete} (id INT(11) PRIMARY KEY)");
-  db_query("INSERT IGNORE INTO {term_edge_delete}
-    SELECT tm2.id FROM {term_edge} tm1
-    INNER JOIN {term_edge} tm2 ON tm1.tid = tm2.tid
-    WHERE tm1.parent = %d AND tm2.depth > tm1.depth
-  ", $tid);
-
-  // Delete those edges
-  db_query("
-    DELETE e.*
-    FROM {term_edge} e
-    JOIN {term_edge_delete} ed ON e.id = ed.id
-  ");
-
-  // Insert new and correct edges
-  $placeholders = join(',', array_fill(0, count($parents), "%d"));
-  $args = $parents;
-  $args[] = $tid;
-  db_query("
-    INSERT IGNORE INTO {term_edge} (tid, parent, depth)
-    SELECT tm2.tid, tm1.parent, tm1.depth + tm2.depth + 1
-    FROM {term_edge} tm1, {term_edge} tm2
-    WHERE tm1.tid IN ($placeholders)
-    AND tm2.parent = %d
-  ", $args);
-
-  // Clean up
-  db_query("DROP TEMPORARY TABLE {term_edge_delete}");
-
-  if (function_exists('db_end_transaction')) {
-    db_end_transaction();
-  }
-}
-
-/**
- * Delete edges
- *
- * @param integer $tid
- *   Term ID
- */
-function _taxonomy_edge_delete($tid) {
-  // Remove edges
-  db_query("DELETE FROM {term_edge} WHERE tid = %d OR parent = %d", $tid, $tid);
-}
-
-/**
- * Rebuild entire edge list
- *
- * @param integer $max_depth
- *   Max depth of hierarchy to build
- * @return integer
- *   Total number of rows inserted
- */
-function taxonomy_edge_rebuild($max_depth = TAXONOMY_EDGE_MAX_DEPTH) {
-  $depth = 0;
-
-  set_time_limit(86400);
-
-  watchdog('taxonomy_edge', 'Rebuilding edges', array(), WATCHDOG_DEBUG);
-
-  if (function_exists('db_start_transaction')) {
-    db_start_transaction();
-  }
-  db_query("DELETE FROM {term_edge}");
-  db_query("INSERT IGNORE INTO {term_edge} (tid, parent, depth) SELECT tid, tid, 0 FROM {term_hierarchy} WHERE tid != 0 AND tid != parent");
-  $total_rows = db_affected_rows();
-  watchdog('taxonomy_edge', 'Depth: %depth - Rows: %rows (%total_rows)', array('%depth' => 0, '%rows' => $total_rows, '%total_rows' => $total_rows), WATCHDOG_DEBUG);
-
-  while ($max_depth-- > 0) {
-    $result = db_query("
-      INSERT IGNORE INTO {term_edge} (tid, parent, depth)
-      SELECT h.tid, e.parent, %d
-      FROM {term_hierarchy} h
-      INNER JOIN {term_edge} e ON e.tid = h.parent
-      WHERE e.depth = %d
-      AND h.tid != 0
-      AND h.tid != h.parent
-    ", $depth + 1, $depth);
-
-    if (!$result) {
-      break;
-    }
-    $depth++;
-
-    $rows = db_affected_rows();
-    $total_rows += $rows;
-    watchdog('taxonomy_edge', 'Depth: %depth - Rows: %rows (%total_rows)', array('%depth' => $depth, '%rows' => $rows, '%total_rows' => $total_rows), WATCHDOG_DEBUG);
-    if ($rows <= 0) {
-      break;
-    }
-  }
-
-  if (function_exists('db_end_transaction')) {
-    db_end_transaction();
-  }
-  return $total_rows;
-}
-
-/**
- * Get parent from edge list
- *
- * @param integer $tid
- *   term id to get parent from
- * @return array
- *   array of term ids
- */
-function _taxonomy_edge_get_parents($tid) {
-  $parents = array();
-  $result = db_query("SELECT e.parent AS tid, d.name FROM {term_edge} e JOIN {term_data} d ON e.parent = d.tid WHERE e.tid = %d AND e.depth > 0 ORDER BY e.depth", $tid);
-  while ($parent = db_fetch_object($result)) {
-    $parents[] = $parent;
-  }
-  return $parents;
-}
-
-/**
- * Get top term id
- *
- * @param $tid
- *   term id to get top tid from
- * @return
- *   (int) top term id
- */
-function taxonomy_edge_get_top_tid($tid) {
-  return db_result(db_query_range("SELECT parent FROM {term_edge} WHERE tid = %d ORDER BY depth DESC", $tid, 0, 1));
 }
 
 /**
@@ -318,6 +105,11 @@ function taxonomy_edge_cronapi($op, $job = NULL) {
   }
 }
 
+
+
+
+// ---------- PRIVATE HELPER FUNCTIONS ----------
+
 /**
  * Rebuild edges
  */
@@ -329,4 +121,277 @@ function taxonomy_edge_rebuild_cron() {
   else {
     return FALSE;
   }
+}
+
+/**
+ * Insert edges for a term.
+ *
+ * @param $tid
+ *   Term ID.
+ * @param $parents
+ *   Parent term IDs, either one integer or an array of integers.
+ * @return integer/boolean
+ *   Number of rows updated or FALSE if failed.
+ */
+function _taxonomy_edge_insert($tid, $parents) {
+  if (!is_array($parents)) {
+    $parents = array($parents);
+  }
+
+  watchdog('taxonomy_edge', 'Inserting taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
+
+  if ($tid > 0) {
+    if (function_exists('db_start_transaction')) {
+      db_start_transaction();
+    }
+
+    db_query("INSERT IGNORE INTO {term_edge} (tid, parent, distance) VALUES(%d, %d, 0)", $tid, $tid);
+    $rows += db_affected_rows();
+
+    foreach ($parents as $parent) {
+      db_query("INSERT IGNORE INTO {term_edge} (tid, parent, distance) SELECT %d, parent, distance + 1 FROM term_edge WHERE tid = %d", $tid, $parent);
+      $rows += db_affected_rows();
+    }
+    if (function_exists('db_end_transaction')) {
+      db_end_transaction();
+    }
+    return $rows;
+  }
+  else {
+    watchdog('taxonomy_edge', 'Invalid term-id (%tid) received', array('%tid' => $tid), WATCHDOG_ERROR);
+    return FALSE;
+  }
+}
+
+/**
+ * Move term in the edge list.
+ *
+ * @param $tid
+ *   Term ID.
+ * @param $parents
+ *   Parent term IDs, either one integer or an array of integers.
+ */
+function _taxonomy_edge_update($tid, $parents) {
+  if (!is_array($parents)) {
+    $parents = array($parents);
+  }
+
+  watchdog('taxonomy_edge', 'Updating taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
+
+  if (function_exists('db_start_transaction')) {
+    db_start_transaction();
+  }
+
+  // Find invalid edges after move
+  db_query_temporary("
+    SELECT DISTINCT tm2.tid, tm2.parent
+    FROM {term_edge} tm1
+    INNER JOIN {term_edge} tm2 ON tm1.tid = tm2.tid
+    WHERE tm1.parent = %d AND tm2.distance > tm1.distance
+  ", $tid, 'taxonomy_edge_delete');
+
+  // Delete those edges
+  db_query("
+    DELETE e.*
+    FROM {term_edge} e
+    JOIN term_edge_delete ed ON e.tid = ed.tid AND e.parent = ed.parent
+  ");
+
+  // Insert new and correct edges
+  $placeholders = db_placeholders($parents, 'int');
+  $args = $parents;
+  $args[] = $tid;
+  db_query("
+    INSERT IGNORE INTO {term_edge} (tid, parent, distance)
+    SELECT tm2.tid, tm1.parent, tm1.distance + tm2.distance + 1
+    FROM {term_edge} tm1, {term_edge} tm2
+    WHERE tm1.tid IN (" . $placeholders . ")
+    AND tm2.parent = %d
+  ", $args);
+
+  if (function_exists('db_end_transaction')) {
+    db_end_transaction();
+  }
+}
+
+/**
+ * Delete edges
+ *
+ * @param $tid
+ *   Term ID.
+ */
+function _taxonomy_edge_delete($tid) {
+  db_query("DELETE FROM {term_edge} WHERE tid = %d OR parent = %d", $tid, $tid);
+}
+
+
+
+
+// ---------- PUBLIC HELPER FUNCTIONS ----------
+
+/**
+ * Rebuild entire edge list.
+ *
+ * @return integer
+ *   Total number of rows inserted.
+ */
+function taxonomy_edge_rebuild() {
+  $depth = 0;
+  $max_depth = variable_get('taxonomy_edge_max_depth', TAXONOMY_EDGE_MAX_DEPTH);
+
+  set_time_limit(86400);
+
+  watchdog('taxonomy_edge', 'Rebuilding edges', array(), WATCHDOG_DEBUG);
+
+  if (function_exists('db_start_transaction')) {
+    db_start_transaction();
+    // TRUNCATE is not transaction safe on some DB's (at least MySQL).
+    db_query("DELETE FROM {term_edge}");
+  }
+  else {
+    // Use TRUNCATE if possible, much faster than DELETE FROM (if there are many rows).
+    db_query("TRUNCATE {term_edge}");
+  }
+
+  db_query("INSERT IGNORE INTO {term_edge} (tid, parent, distance) SELECT tid, tid, 0 FROM {term_hierarchy} WHERE tid <> 0 AND tid <> parent");
+  $total_rows = db_affected_rows();
+  watchdog('taxonomy_edge', 'distance: %distance - Rows: %rows (%total_rows)', array('%distance' => 0, '%rows' => $total_rows, '%total_rows' => $total_rows), WATCHDOG_DEBUG);
+
+  while ($max_depth-- > 0) {
+    $result = db_query("
+      INSERT IGNORE INTO {term_edge} (tid, parent, distance)
+      SELECT h.tid, e.parent, %d
+      FROM {term_hierarchy} h
+      INNER JOIN {term_edge} e ON e.tid = h.parent
+      WHERE e.distance = %d
+      AND h.tid <> 0
+      AND h.tid <> h.parent
+    ", $depth + 1, $depth);
+
+    if (!$result) {
+      break;
+    }
+    $depth++;
+
+    $rows = db_affected_rows();
+    $total_rows += $rows;
+    watchdog('taxonomy_edge', 'distance: %distance - Rows: %rows (%total_rows)', array('%distance' => $depth, '%rows' => $rows, '%total_rows' => $total_rows), WATCHDOG_DEBUG);
+    if ($rows <= 0) {
+      break;
+    }
+  }
+
+  if (function_exists('db_end_transaction')) {
+    db_end_transaction();
+  }
+  return $total_rows;
+}
+
+/**
+ * Get parent from edge list.
+ *
+ * @param $tid
+ *   term id to get parent from.
+ * @return array
+ *   array of term ids.
+ */
+function taxonomy_edge_get_parents($tid) {
+  $parents = array();
+  $result = db_query("SELECT e.parent AS tid, d.name FROM {term_edge} e JOIN {term_data} d ON e.parent = d.tid WHERE e.tid = %d AND e.distance > 0 ORDER BY e.distance", $tid);
+  while ($parent = db_fetch_object($result)) {
+    $parents[] = $parent;
+  }
+  return $parents;
+}
+
+/**
+ * Get top term id.
+ *
+ * @param $tid
+ *   Term ID to get top term ID from.
+ * @return integer
+ *   Top term ID.
+ */
+function taxonomy_edge_get_top_tid($tid) {
+  return db_result(db_query("SELECT h.tid FROM {term_edge} te INNER JOIN {term_hierarchy} h ON te.parent = h.tid WHERE h.parent = 0 AND te.tid = %d", $tid));
+}
+
+/**
+ * Reimplementation of taxonomy_select_nodes().
+ * Uses the Taxonomy Edge table instead of cpu/mem (mostly mem) hungry taxonomy_get_tree().
+ * @note This function also fixes the "broken" default order by from the taxonomy_select_nodes() function,
+ *       by added "n.nid" to the ORDER BY clause. This is ensure consistent results on each query.
+ *
+ * @see taxonomy_select_nodes()
+ */
+function taxonomy_edge_taxonomy_select_nodes($tids = array(), $operator = 'or', $depth = 0, $pager = TRUE, $order = 'n.sticky DESC, n.created DESC, n.nid DESC') {
+  // Fix broken default order by the Taxonomy Module.
+  // Ordering without a unique key could result in incosistent result sets,
+  // depending on which index (if any) the database decides to use for the query.
+  switch ($order) {
+    case 'n.sticky DESC, n.created DESC':
+      $order .= ', n.nid DESC';
+      break;
+    case 'n.sticky ASC, n.created ASC':
+      $order .= ', n.nid ASC';
+      break;
+  }
+
+  // If possible, use optimize by using GROUP BY instead of DISTINCT.
+  // This is what the idx_taxonomy_edge index is used for.
+  $group_by = '';
+  $distinct = 'DISTINCT(n.nid)';
+  switch ($order) {
+    case 'n.sticky DESC, n.created DESC, n.nid DESC':
+    case 'n.sticky ASC, n.created ASC, n.nid ASC':
+      $group_by = ' GROUP BY n.sticky, n.created, n.nid';
+      $distinct = 'n.nid';
+      break;
+    case 'n.created DESC, n.nid DESC':
+    case 'n.created ASC, n.nid ASC':
+      $group_by = ' GROUP BY n.created, n.nid';
+      $distinct = 'n.nid';
+      break;
+  }
+
+  if (count($tids) > 0) {
+    if ($operator == 'or') {
+      $args = $tids;
+      $placeholders = db_placeholders($args, 'int');
+      if ($depth === 'all') {
+        $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
+        $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND n.status = 1';
+      }
+      else {
+        $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND te.distance <= %d AND n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
+        $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND te.distance <= %d AND n.status = 1';
+        $args[] = $depth;
+      }
+    }
+    else {
+      $join = '';
+      $args = array();
+      foreach ($tids as $index => $tid) {
+        $join .= ' INNER JOIN {term_node} tn' . $index . ' ON n.vid = tn' . $index . '.vid';
+        $join .= ' INNER JOIN {term_edge} te' . $index . ' ON tn' . $index . '.tid = te'. $index . '.tid AND te' . $index . '.parent = %d';
+        $args[] = $tid;
+        if ($depth !== 'all') {
+          $join .= ' AND te'. $index .'.distance <= %d';
+          $args[] = $depth;
+        }
+      }
+      $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n ' . $join . ' WHERE n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
+      $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n ' . $join . ' WHERE n.status = 1';
+    }
+    $sql = db_rewrite_sql($sql);
+    if ($pager) {
+      $sql_count = db_rewrite_sql($sql_count);
+      $result = pager_query($sql, variable_get('default_nodes_main', 10), 0, $sql_count, $args);
+    }
+    else {
+      $result = db_query_range($sql, $args, 0, variable_get('feed_default_items', 10));
+    }
+  }
+
+  return $result;
 }

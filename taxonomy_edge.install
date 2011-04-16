@@ -9,18 +9,21 @@
  * Implementation of hook_install().
  */
 function taxonomy_edge_install() {
-  // Create tables.
   drupal_install_schema('taxonomy_edge');
   _taxonomy_edge_install();
+  drupal_set_message(st('Taxonomy Edge is now installed. Add the provided patch to the core module Taxonomy module for better performance.'));
+  drupal_set_message(st('Taxonomy Edge settings are available under !link',
+    array('!link' => l(st('Administer > Content > Taxonomy'), 'admin/content/taxonomy/edge'))
+  ));
 }
 
 /**
  * Implementation of hook_uninstall().
  */
 function taxonomy_edge_uninstall() {
-  // Remove tables.
   drupal_uninstall_schema('taxonomy_edge');
   _taxonomy_edge_uninstall();
+  drupal_set_message(st('Taxonomy Edge is now uninstalled. You may remove the provided patch to the core module Taxonomy module if applicable.'));
 }
 
 /**
@@ -36,14 +39,8 @@ function taxonomy_edge_enable() {
  */
 function taxonomy_edge_schema() {
   $schema['term_edge'] = array(
-    'description' => 'Stores nested information for taxonomies.',
+    'description' => 'Stores edge list for taxonomies.',
     'fields' => array(
-      'id' => array(
-        'description' => 'Primary Key',
-        'type' => 'serial',
-        'size' => 'normal',
-        'not null' => TRUE,
-      ),
       'tid' => array(
         'description' => 'Term ID',
         'type' => 'int',
@@ -58,21 +55,18 @@ function taxonomy_edge_schema() {
         'not null' => TRUE,
         'default' => 0
       ),
-      'depth' => array(
-        'description' => 'Depth',
+      'distance' => array(
+        'description' => 'Distance to parent (depth)',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0
       ),
     ),
-    'primary key' => array('id'),
-    'unique key' => array(
-      'idx_highlander' => array('tid', 'parent'),
-    ),
+    'primary key' => array('tid', 'parent'),
     'indexes' => array(
-      'idx_term' => array('tid', 'depth'),
-      'idx_parent' => array('parent', 'depth'),
+      'idx_term' => array('tid', 'distance'),
+      'idx_parent' => array('parent', 'distance'),
     ),
   );
 
@@ -81,60 +75,14 @@ function taxonomy_edge_schema() {
 
 function _taxonomy_edge_install() {
   $ret = array();
-
-  // This creates a view with the top-level taxonomy term-id for each taxonomy-term
-  // Taxonomy-terms with no parents will have NULL as top_tid
-  // Use IF(top_tid IS NULL, tid, top_tid) AS top_tid in query to get tid as top-tid if no parent
-  $sql = <<<SQL
-CREATE VIEW {views_term_top_tid} AS
-SELECT te.tid,
-(
-  SELECT te2.parent
-  FROM {term_edge} te2
-  WHERE te2.tid = te.tid
-  AND te2.depth <> 0
-  ORDER BY te2.depth DESC LIMIT 1
-) AS top_tid
-FROM {term_edge} te
-WHERE te.depth = 0
-SQL;
-
-  $ret[] = update_sql($sql);
-
-  // This creates a view with the materialized path for each taxonomy-term.
-  // ORDER BY sort_path to get correct order of paths
-  $sql = <<<SQL
-CREATE VIEW {views_term_materialized_path} AS
-SELECT
-  te.tid,
-  (
-    SELECT GROUP_CONCAT(td2.name ORDER BY te2.depth DESC SEPARATOR '/') AS path
-    FROM {term_data} td2
-    INNER JOIN {term_edge} te2 ON td2.tid = te2.parent
-    WHERE
-    te2.tid = te.tid
-  ) AS path,
-  (
-    SELECT GROUP_CONCAT(td2.weight+1500, '/', td2.name ORDER BY te2.depth DESC SEPARATOR '/') AS sort_path
-    FROM {term_data} td2
-    INNER JOIN {term_edge} te2 ON td2.tid = te2.parent
-    WHERE
-    te2.tid = te.tid
-  ) AS sort_path
-FROM
-{term_edge} te
-INNER JOIN {term_data} td ON te.tid = td.tid
-WHERE te.depth = 0
-SQL;
-
-  $ret[] = update_sql($sql);
-
+  db_add_index($ret, 'node', 'idx_taxonomy_edge', array('sticky', 'created', 'nid'));
+  db_add_index($ret, 'term_node', 'idx_taxonomy_edge', array('vid', 'tid'));
   return $ret;
 }
 
 function _taxonomy_edge_uninstall() {
   $ret = array();
-  $ret[] = update_sql("DROP VIEW {views_term_top_tid}");
-  $ret[] = update_sql("DROP VIEW {views_term_materialized_path}");
+  db_drop_index($ret, 'node', 'idx_taxonomy_edge');
+  db_drop_index($ret, 'term_node', 'idx_taxonomy_edge');
   return $ret;
 }
