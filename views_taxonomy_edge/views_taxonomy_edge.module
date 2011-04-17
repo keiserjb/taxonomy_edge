@@ -1,0 +1,57 @@
+<?php
+/**
+ * @file
+ *
+ * Integration with Views using Taxonomy Edge.
+ *
+ * Overrides the depth arguments and uses Taxonomy Edge for these.
+ * This now allows using 'all' as a depth argument.
+ */
+
+/**
+ * Implementation of hook_views_handlers() to register all of the basic handlers
+ * views uses.
+ */
+function views_taxonomy_edge_views_handlers() {
+  return array(
+    'info' => array(
+      'path' => drupal_get_path('module', 'views_taxonomy_edge') . '/handlers',
+    ),
+    'handlers' => array(
+      'views_handler_argument_term_edge_node_tid_depth' => array(
+        'parent' => 'views_handler_argument_term_node_tid_depth',
+      ),
+      'views_handler_argument_term_edge_node_tid_depth_modifier' => array(
+        'parent' => 'views_handler_argument_term_node_tid_depth_modifier',
+      ),
+      'views_handler_filter_term_edge_node_tid_depth' => array(
+        'parent' => 'views_handler_filter_term_node_tid_depth',
+      ),
+    ),
+  );
+}
+
+function views_taxonomy_edge_views_data_alter(&$data) {
+  $data['node']['term_node_tid_depth'] = array(
+    'group' => t('Taxonomy'),
+    'title' => t('Term ID (with depth)'),
+    'help' => t('The depth filter is more complex, so provides fewer options.'),
+    'real field' => 'vid',
+    'argument' => array(
+      'handler' => 'views_handler_argument_term_edge_node_tid_depth',
+      'accept depth modifier' => TRUE,
+    ),
+    'filter' => array(
+      'handler' => 'views_handler_filter_term_edge_node_tid_depth',
+    ),
+  );
+
+  $data['node']['term_node_tid_depth_modifier'] = array(
+    'group' => t('Taxonomy'),
+    'title' => t('Term ID depth modifier'),
+    'help' => t('Allows the "depth" for Taxonomy: Term ID (with depth) to be modified via an additional argument.'),
+    'argument' => array(
+      'handler' => 'views_handler_argument_term_edge_node_tid_depth_modifier',
+    ),
+  );
+}
