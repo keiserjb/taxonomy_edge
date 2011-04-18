@@ -33,7 +33,7 @@ class views_handler_argument_term_edge_node_tid_depth extends views_handler_argu
       $placeholder = "= %d";
       $tids = array($this->argument);
     }
-    
+
     $subquery = "\n  SELECT tn.vid FROM {term_node} tn\n";
     $where = "  WHERE \n";
 
@@ -49,7 +49,7 @@ class views_handler_argument_term_edge_node_tid_depth extends views_handler_argu
       $args = $tids;
       $args[] = $this->options['depth'];
     }
-    else if ($this->options['depth'] < 0) {
+    elseif ($this->options['depth'] < 0) {
       $subquery .= "    INNER JOIN {term_edge} te ON te.tid = tn.tid\n";
       $where .= "    te.parent = (SELECT parent FROM {term_edge} WHERE tid $placeholder AND distance = %d)\n";
       $where .= "    AND te.distance <= %d\n";
