@@ -430,3 +430,56 @@ function taxonomy_edge_taxonomy_select_nodes($tids = array(), $operator = 'or', 
 
   return $result;
 }
+
+/**
+ * Reimplementation of taxonomy_get_tree().
+ * Limit db fetch to only specified parent.
+ * @see taxonomy_get_tree()
+ */
+function taxonomy_edge_taxonomy_get_tree($vid, $parent = 0, $depth = -1, $max_depth = NULL) {
+  static $children, $parents, $terms;
+
+  $depth++;
+
+  // We cache trees, so it's not CPU-intensive to call get_tree() on a term
+  // and its children, too.
+  if (!isset($children[$vid][$parent])) {
+    $children[$vid][$parent] = array();
+
+    $result = db_query(db_rewrite_sql('
+SELECT t.*, h.parent 
+FROM {term_data} t 
+INNER JOIN {term_hierarchy} h ON t.tid = h.tid 
+INNER JOIN {term_edge} e ON t.tid = e.tid 
+INNER JOIN {term_hierarchy} h2 ON e.parent = h2.tid 
+WHERE t.vid = %d AND h2.parent = %d
+ORDER BY t.weight, t.name
+    ', 't', 'tid'), $vid, $parent);
+
+    while ($term = db_fetch_object($result)) {
+      $children[$vid][$term->parent][] = $term;
+      $parents[$vid][$term->tid][] = $term;
+      $terms[$vid][$term->tid] = $term;
+    }
+  }
+
+  $max_depth = (is_null($max_depth)) ? count($children[$vid]) : $max_depth;
+  $tree = array();
+  if ($max_depth > $depth && !empty($children[$vid][$parent])) {
+    foreach ($children[$vid][$parent] as $child) {
+      $term = drupal_clone($terms[$vid][$child->tid]);
+      $term->depth = $depth;
+      // The "parent" attribute is not useful, as it would show one parent only.
+      unset($term->parent);
+      foreach ($parents[$vid][$child->tid] as $parent_term) {
+        $term->parents[] = $parent_term->parent;
+      }
+      $tree[] = $term;
+      if (!empty($children[$vid][$child->tid])) {
+        $tree = array_merge($tree, taxonomy_get_tree($vid, $child->tid, $depth, $max_depth));
+      }
+    }
+  }
+
+  return $tree;
+}
