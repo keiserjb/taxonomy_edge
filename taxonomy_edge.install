@@ -31,7 +31,8 @@ function taxonomy_edge_uninstall() {
  */
 function taxonomy_edge_enable() {
   // Rebuild the edge list when module is enabled
-  taxonomy_edge_rebuild();
+  drupal_load('module', 'taxonomy_edge');
+  taxonomy_edge_rebuild_batch();
 }
 
 /**

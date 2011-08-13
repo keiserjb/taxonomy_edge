@@ -114,12 +114,47 @@ function taxonomy_edge_cronapi($op, $job = NULL) {
  * Rebuild edges
  */
 function taxonomy_edge_rebuild_cron() {
-  $rows = taxonomy_edge_rebuild();
+  $context = array();
+  $rows = taxonomy_edge_rebuild($context);
   if (is_numeric($rows)) {
     return TRUE;
   }
   else {
     return FALSE;
+  }
+}
+
+/**
+ * Start batch job for rebuild of edges
+ */
+function taxonomy_edge_rebuild_batch() {
+  $batch = array(
+    'operations' => array(
+      array('taxonomy_edge_rebuild', array())
+    ),
+    'finished' => 'taxonomy_edge_rebuild_finished',
+    'file' => drupal_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.pages.inc',
+    'title' => t('Rebuilding taxonomy edges'),
+    'init_message' => t('Rebuilding taxonomy edges'),
+  );
+  batch_set($batch);
+}
+
+/**
+ * Finished function for rebuild tree batch operation.
+ *
+ * @param type $success
+ * @param type $result
+ * @param type $operations 
+ */
+function taxonomy_edge_rebuild_finished($success, $result, $operations) {
+  if ($success) {
+    drupal_set_message(t('Taxonomy edges rebuilt: %rows processed with depth %depth in %time seconds', 
+      array('%rows' => $result['rows'], '%depth' => $result['depth'], '%time' => sprintf("%.03f", $result['time'])))
+    );
+  }
+  else {
+    drupal_set_message(t('Taxonomy edges rebuilt: FAILED'), 'error');
   }
 }
 
@@ -248,13 +283,12 @@ function _taxonomy_edge_delete($tid) {
  * @return integer
  *   Total number of rows inserted.
  */
-function taxonomy_edge_rebuild() {
+function taxonomy_edge_rebuild(&$context) {
   $depth = 0;
   $max_depth = variable_get('taxonomy_edge_max_depth', TAXONOMY_EDGE_MAX_DEPTH);
 
+  $time = microtime(TRUE);
   set_time_limit(86400);
-
-  watchdog('taxonomy_edge', 'Rebuilding edges', array(), WATCHDOG_DEBUG);
 
   if (function_exists('db_start_transaction')) {
     db_start_transaction();
@@ -276,8 +310,9 @@ function taxonomy_edge_rebuild() {
     AND e.tid IS NULL
   ");
   $total_rows = db_affected_rows();
-  watchdog('taxonomy_edge', 'distance: %distance - Rows: %rows (%total_rows)', array('%distance' => 0, '%rows' => $total_rows, '%total_rows' => $total_rows), WATCHDOG_DEBUG);
-
+  $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
+  $context['finished'] = 0.5;
+  
   while ($max_depth-- > 0) {
     $result = db_query("
       INSERT INTO {term_edge} (tid, parent, distance)
@@ -297,16 +332,21 @@ function taxonomy_edge_rebuild() {
     $depth++;
 
     $rows = db_affected_rows();
-    $total_rows += $rows;
-    watchdog('taxonomy_edge', 'distance: %distance - Rows: %rows (%total_rows)', array('%distance' => $depth, '%rows' => $rows, '%total_rows' => $total_rows), WATCHDOG_DEBUG);
     if ($rows <= 0) {
       break;
     }
+
+    $total_rows += $rows;
+    $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
+    $context['finished'] += (1 - $context['finished']) / 2;
   }
+  $context['finished'] = 1;
 
   if (function_exists('db_end_transaction')) {
     db_end_transaction();
   }
+  $context['results'] = array('rows' => $total_rows, 'depth' => $depth - 1, 'time' => microtime(TRUE) - $time);
+  
   return $total_rows;
 }
 
