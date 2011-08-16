@@ -191,7 +191,7 @@ function _taxonomy_edge_insert($tid, $parents) {
         LEFT JOIN {term_edge} e2 ON e2.tid = %d AND e2.parent = e1.parent
         WHERE e1.tid = %d
         AND e2.tid IS NULL
-      ", $tid, $parent);
+      ", $tid, $tid, $parent);
       $rows += db_affected_rows();
     }
     if (function_exists('db_end_transaction')) {
