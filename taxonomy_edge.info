@@ -1,6 +1,6 @@
 name = Taxonomy Edge
 description = Edge lists for taxonomies
 package = Taxonomy
-core = 6.x
+core = 7.x
 
 dependencies[] = taxonomy

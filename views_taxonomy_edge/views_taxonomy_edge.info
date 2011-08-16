@@ -1,7 +1,7 @@
 name = Views Taxonomy Edge
 description = Views for taxonomies using Taxonomy Edge
 package = Views
-core = 6.x
+core = 7.x
 
 dependencies[] = taxonomy_edge
 dependencies[] = views

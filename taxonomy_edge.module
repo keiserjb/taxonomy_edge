@@ -10,7 +10,7 @@
  *
  * Example of getting all children from tid:14
  *
- * SELECT tid FROM {term_edge} WHERE parent = 14
+ * SELECT tid FROM {taxonomy_term_edge} WHERE parent = 14
  *
  * NOTE: Multiple parents are somewhat supported.
  *
@@ -38,7 +38,7 @@ function taxonomy_edge_help($section) {
   switch ($section) {
     case 'admin/help#taxonomy_edge':
       // Return a line-break version of the module README.txt
-      return filter_filter('process', 1, NULL, file_get_contents( dirname(__FILE__) . "/README.txt") );
+      return check_markup(file_get_contents( dirname(__FILE__) . "/README.txt"));
   }
 }
 
@@ -56,7 +56,7 @@ function taxonomy_edge_menu() {
   $items = array();
 
   // settings page
-  $items['admin/content/taxonomy/edge'] = array(
+  $items['admin/structure/taxonomy/edge'] = array(
     'title'            => 'Edge',
     'description'      => 'Administer taxonomy edges',
     'page callback'    => 'drupal_get_form',
@@ -180,19 +180,18 @@ function _taxonomy_edge_insert($tid, $parents) {
       db_start_transaction();
     }
 
-    @db_query("INSERT INTO {term_edge} (tid, parent, distance) VALUES(%d, %d, 0)", $tid, $tid);
-    $rows += db_affected_rows();
+    $rows += db_query("INSERT INTO {taxonomy_term_edge} (tid, parent, distance) VALUES(:tid1, :tid2, 0)", array(':tid1' => $tid, ':tid2' => $tid))->rowCount();
 
     foreach ($parents as $parent) {
-      db_query("
-        INSERT INTO {term_edge} (tid, parent, distance)
-        SELECT %d, e1.parent, e1.distance + 1
-        FROM {term_edge} e1
-        LEFT JOIN {term_edge} e2 ON e2.tid = %d AND e2.parent = e1.parent
-        WHERE e1.tid = %d
+      // @todo Investigate missing argument!
+      $rows += db_query("
+        INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
+        SELECT :tid, e1.parent, e1.distance + 1
+        FROM {taxonomy_term_edge} e1
+        LEFT JOIN {taxonomy_term_edge} e2 ON e2.tid = :tid AND e2.parent = e1.parent
+        WHERE e1.tid = :parent
         AND e2.tid IS NULL
-      ", $tid, $tid, $parent);
-      $rows += db_affected_rows();
+      ", array(':tid' => $tid, ':parent' => $parent))->rowCount();
     }
     if (function_exists('db_end_transaction')) {
       db_end_transaction();
@@ -229,15 +228,15 @@ function _taxonomy_edge_update($tid, $parents) {
   db_query("
     INSERT INTO {term_edge_delete}
     SELECT DISTINCT te2.tid, te2.parent
-    FROM {term_edge} te1
-    INNER JOIN {term_edge} te2 ON te1.tid = te2.tid
-    WHERE te1.parent = %d AND te2.distance > te1.distance
-  ", $tid);
+    FROM {taxonomy_term_edge} te1
+    INNER JOIN {taxonomy_term_edge} te2 ON te1.tid = te2.tid
+    WHERE te1.parent = :tid AND te2.distance > te1.distance
+  ", array(':tid' => $tid));
 
   // Delete those edges
   db_query("
     DELETE e.*
-    FROM {term_edge} e
+    FROM {taxonomy_term_edge} e
     JOIN {term_edge_delete} ed ON e.tid = ed.tid AND e.parent = ed.parent
   ");
 
@@ -246,11 +245,11 @@ function _taxonomy_edge_update($tid, $parents) {
   $args = $parents;
   $args[] = $tid;
   db_query("
-    INSERT INTO {term_edge} (tid, parent, distance)
+    INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
     SELECT te2.tid, te1.parent, te1.distance + te2.distance + 1
-    FROM {term_edge} te1
-    INNER JOIN {term_edge} te2 ON te1.tid IN (" . $placeholders . ") AND te2.parent = %d
-    LEFT JOIN {term_edge} te3 ON te2.tid = te3.tid AND te1.parent = te3.parent
+    FROM {taxonomy_term_edge} te1
+    INNER JOIN {taxonomy_term_edge} te2 ON te1.tid IN (" . $placeholders . ") AND te2.parent = :parent
+    LEFT JOIN {taxonomy_term_edge} te3 ON te2.tid = te3.tid AND te1.parent = te3.parent
     WHERE te3.tid IS NULL
   ", $args);
 
@@ -269,7 +268,7 @@ function _taxonomy_edge_update($tid, $parents) {
  *   Term ID.
  */
 function _taxonomy_edge_delete($tid) {
-  db_query("DELETE FROM {term_edge} WHERE tid = %d OR parent = %d", $tid, $tid);
+  db_query("DELETE FROM {taxonomy_term_edge} WHERE tid = :tid OR parent = :tid", array('tid' => $tid));
 }
 
 
@@ -293,45 +292,44 @@ function taxonomy_edge_rebuild(&$context) {
   if (function_exists('db_start_transaction')) {
     db_start_transaction();
     // TRUNCATE is not transaction safe on some DB's (at least MySQL).
-    db_query("DELETE FROM {term_edge}");
+    db_query("DELETE FROM {taxonomy_term_edge}");
   }
   else {
     // Use TRUNCATE if possible, much faster than DELETE FROM (if there are many rows).
-    db_query("TRUNCATE {term_edge}");
+    db_query("TRUNCATE {taxonomy_term_edge}");
   }
 
-  db_query("
-    INSERT INTO {term_edge} (tid, parent, distance)
+  $total_rows = db_query("
+    INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
     SELECT h.tid, h.tid, 0
-    FROM {term_hierarchy} h
-    LEFT JOIN {term_edge} e ON e.tid = h.tid AND e.parent = h.tid
+    FROM {taxonomy_term_hierarchy} h
+    LEFT JOIN {taxonomy_term_edge} e ON e.tid = h.tid AND e.parent = h.tid
     WHERE h.tid <> 0
     AND h.tid <> h.parent
     AND e.tid IS NULL
-  ");
-  $total_rows = db_affected_rows();
+  ")->rowCount();
   $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
   $context['finished'] = 0.5;
   
   while ($max_depth-- > 0) {
     $result = db_query("
-      INSERT INTO {term_edge} (tid, parent, distance)
-      SELECT h.tid, e.parent, %d
-      FROM {term_hierarchy} h
-      INNER JOIN {term_edge} e ON e.tid = h.parent
-      LEFT JOIN {term_edge} e2 ON e2.tid = h.tid AND e2.parent = e.parent
-      WHERE e.distance = %d
+      INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
+      SELECT h.tid, e.parent, :depth + 1
+      FROM {taxonomy_term_hierarchy} h
+      INNER JOIN {taxonomy_term_edge} e ON e.tid = h.parent
+      LEFT JOIN {taxonomy_term_edge} e2 ON e2.tid = h.tid AND e2.parent = e.parent
+      WHERE e.distance = :depth
       AND h.tid <> 0
       AND h.tid <> h.parent
       AND e2.tid IS NULL
-    ", $depth + 1, $depth);
+    ", array('depth' => $depth));
 
     if (!$result) {
       break;
     }
     $depth++;
 
-    $rows = db_affected_rows();
+    $rows = $result->rowCount();
     if ($rows <= 0) {
       break;
     }
@@ -362,11 +360,11 @@ function taxonomy_edge_get_parents($tid) {
   $parents = array();
   $result = db_query("
     SELECT e.parent AS tid, d.name
-    FROM {term_edge} e JOIN {term_data} d ON e.parent = d.tid
-    WHERE e.tid = %d
+    FROM {taxonomy_term_edge} e JOIN {taxonomy_term_data} d ON e.parent = d.tid
+    WHERE e.tid = :tid
     AND e.distance > 0
     ORDER BY e.distance
-  ", $tid);
+  ", array($tid));
   while ($parent = db_fetch_object($result)) {
     $parents[] = $parent;
   }
@@ -384,11 +382,11 @@ function taxonomy_edge_get_parents($tid) {
 function taxonomy_edge_get_top_tid($tid) {
   return db_result(db_query("
     SELECT h.tid
-    FROM {term_edge} te
-    INNER JOIN {term_hierarchy} h ON te.parent = h.tid
+    FROM {taxonomy_term_edge} te
+    INNER JOIN {taxonomy_term_hierarchy} h ON te.parent = h.tid
     WHERE h.parent = 0
-    AND te.tid = %d
-  ", $tid));
+    AND te.tid = :tid
+  ", array($tid)));
 }
 
 /**
@@ -434,12 +432,12 @@ function taxonomy_edge_taxonomy_select_nodes($tids = array(), $operator = 'or', 
       $args = $tids;
       $placeholders = db_placeholders($args, 'int');
       if ($depth === 'all') {
-        $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
-        $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND n.status = 1';
+        $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {taxonomy_term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
+        $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {taxonomy_term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND n.status = 1';
       }
       else {
-        $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND te.distance <= %d AND n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
-        $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND te.distance <= %d AND n.status = 1';
+        $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {taxonomy_term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND te.distance <= %d AND n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
+        $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {taxonomy_term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND te.distance <= %d AND n.status = 1';
         $args[] = $depth;
       }
     }
@@ -448,7 +446,7 @@ function taxonomy_edge_taxonomy_select_nodes($tids = array(), $operator = 'or', 
       $args = array();
       foreach ($tids as $index => $tid) {
         $join .= ' INNER JOIN {term_node} tn' . $index . ' ON n.vid = tn' . $index . '.vid';
-        $join .= ' INNER JOIN {term_edge} te' . $index . ' ON tn' . $index . '.tid = te'. $index . '.tid AND te' . $index . '.parent = %d';
+        $join .= ' INNER JOIN {taxonomy_term_edge} te' . $index . ' ON tn' . $index . '.tid = te'. $index . '.tid AND te' . $index . '.parent = %d';
         $args[] = $tid;
         if ($depth !== 'all') {
           $join .= ' AND te'. $index .'.distance <= %d';
@@ -489,15 +487,15 @@ function taxonomy_edge_taxonomy_get_tree($vid, $parent = 0, $depth = -1, $max_de
     if ($parent) {
       $result = db_query(db_rewrite_sql('
         SELECT t.*, h.parent 
-        FROM {term_data} t
-        INNER JOIN {term_hierarchy} h ON t.tid = h.tid 
-        INNER JOIN {term_edge} e ON t.tid = e.tid 
+        FROM {taxonomy_term_data} t
+        INNER JOIN {taxonomy_term_hierarchy} h ON t.tid = h.tid 
+        INNER JOIN {taxonomy_term_edge} e ON t.tid = e.tid 
         WHERE t.vid = %d AND e.parent = %d
         ORDER BY t.weight, t.name
       ', 't', 'tid'), $vid, $parent);
     }
     else {
-      $result = db_query(db_rewrite_sql('SELECT t.*, parent FROM {term_data} t INNER JOIN {term_hierarchy} h ON t.tid = h.tid WHERE t.vid = %d ORDER BY weight, name', 't', 'tid'), $vid);
+      $result = db_query(db_rewrite_sql('SELECT t.*, parent FROM {taxonomy_term_data} t INNER JOIN {taxonomy_term_hierarchy} h ON t.tid = h.tid WHERE t.vid = %d ORDER BY weight, name', 't', 'tid'), $vid);
     }
     
     while ($term = db_fetch_object($result)) {

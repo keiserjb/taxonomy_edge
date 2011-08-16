@@ -9,7 +9,6 @@
  * Implementation of hook_install().
  */
 function taxonomy_edge_install() {
-  drupal_install_schema('taxonomy_edge');
   _taxonomy_edge_install();
   drupal_set_message(st('Taxonomy Edge is now installed. Add the provided patch to the core module Taxonomy module for better performance.'));
   drupal_set_message(st('Taxonomy Edge settings are available under !link',
@@ -21,7 +20,6 @@ function taxonomy_edge_install() {
  * Implementation of hook_uninstall().
  */
 function taxonomy_edge_uninstall() {
-  drupal_uninstall_schema('taxonomy_edge');
   _taxonomy_edge_uninstall();
   drupal_set_message(st('Taxonomy Edge is now uninstalled. You may remove the provided patch to the core module Taxonomy module if applicable.'));
 }
@@ -39,7 +37,7 @@ function taxonomy_edge_enable() {
  * Implementation of hook_schema().
  */
 function taxonomy_edge_schema() {
-  $schema['term_edge'] = array(
+  $schema['taxonomy_term_edge'] = array(
     'description' => 'Stores edge list for taxonomies.',
     'fields' => array(
       'tid' => array(
@@ -76,14 +74,14 @@ function taxonomy_edge_schema() {
 
 function _taxonomy_edge_install() {
   $ret = array();
-  db_add_index($ret, 'node', 'idx_taxonomy_edge', array('sticky', 'created', 'nid'));
-  db_add_index($ret, 'term_node', 'idx_taxonomy_edge', array('vid', 'tid'));
+  db_add_index('node', 'idx_taxonomy_edge', array('sticky', 'created', 'nid'));
+  // db_add_index('term_node', 'idx_taxonomy_edge', array('vid', 'tid'));
   return $ret;
 }
 
 function _taxonomy_edge_uninstall() {
   $ret = array();
-  db_drop_index($ret, 'node', 'idx_taxonomy_edge');
-  db_drop_index($ret, 'term_node', 'idx_taxonomy_edge');
+  db_drop_index('node', 'idx_taxonomy_edge');
+  // db_drop_index('term_node', 'idx_taxonomy_edge');
   return $ret;
 }
