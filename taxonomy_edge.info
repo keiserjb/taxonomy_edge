@@ -4,3 +4,4 @@ package = Taxonomy
 core = 7.x
 
 dependencies[] = taxonomy
+configure = admin/structure/taxonomy/edge
