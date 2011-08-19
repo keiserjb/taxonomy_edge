@@ -9,7 +9,7 @@
  * @see views_handler_argument_term_node_tid_depth.inc
  */
 class views_handler_argument_term_edge_node_tid_depth extends views_handler_argument_term_node_tid_depth {
-  function query() {
+  function query($group_by = FALSE) {
     $this->ensure_my_table();
 
     if (!empty($this->options['break_phrase'])) {
@@ -21,47 +21,56 @@ class views_handler_argument_term_edge_node_tid_depth extends views_handler_argu
       }
 
       if (count($tids->value) > 1) {
-        $placeholder = " IN (" . implode(', ', array_fill(0, sizeof($tids->value), '%d')) . ")";
+        $operator = 'IN';
       }
       else {
-        $placeholder = " = %d";
+        $operator = '=';
       }
 
       $tids = $tids->value;
     }
     else {
-      $placeholder = "= %d";
-      $tids = array($this->argument);
+      $operator = "=";
+      $tids = $this->argument;
     }
+    // Now build the subqueries.
+    $subquery = db_select('taxonomy_index', 'tn');
+    $subquery->addField('tn', 'nid');
 
-    $subquery = "\n  SELECT tn.vid FROM {term_node} tn\n";
-    $where = "  WHERE \n";
-
-    if ($this->options['depth'] == 'all') {
-      $subquery .= "    INNER JOIN {term_edge} te ON te.tid = tn.tid\n";
-      $where .= "    te.parent $placeholder\n";
-      $args = $tids;
-    }
-    elseif ($this->options['depth'] > 0) {
-      $subquery .= "    INNER JOIN {term_edge} te ON te.tid = tn.tid\n";
-      $where .= "    te.parent $placeholder\n";
-      $where .= "    AND te.distance <= %d\n";
-      $args = $tids;
-      $args[] = $this->options['depth'];
-    }
-    elseif ($this->options['depth'] < 0) {
-      $subquery .= "    INNER JOIN {term_edge} te ON te.tid = tn.tid\n";
-      $where .= "    te.parent = (SELECT parent FROM {term_edge} WHERE tid $placeholder AND distance = %d)\n";
-      $where .= "    AND te.distance <= %d\n";
-      $args = $tids;
-      $args[] = abs($this->options['depth']);
-      $args[] = abs($this->options['depth']);
+    if (!$this->options['depth'] && $this->options['depth'] != 'all') {
+      $subquery->condition('tn.tid', $tids, $operator);
     }
     else {
-      $where .= "    tn.tid $placeholder\n";
-      $args = $tids;
+      $subquery->innerJoin('taxonomy_term_edge', 'te', 'te.tid = tn.tid');
+      if ($this->options['depth'] == 'all') {
+        $subquery->condition('te.parent', $tids, $operator);
+      }
+      elseif ($this->options['depth'] > 0) {
+        $subquery->condition('te.parent', $tids, $operator);
+        $subquery->condition('te.distance', $this->options['depth'], '<');
+      }
+      elseif ($this->options['depth'] < 0) {
+        // Find max distance upwards
+        $subquery2 = db_select('taxonomy_term_edge', 'te2')
+          ->fields('te2', array('distance'))
+          ->condition('te2.tid', $tids, $operator)
+          ->condition('te2.distance', abs($this->options['depth']), '<=')
+          ->orderBy('te2.distance', 'DESC')
+          ->range(0, 1)
+          ->execute();
+        $distance = $subquery2->fetchField();
+
+        // Select upwards using parents
+        $subquery2 = db_select('taxonomy_term_edge', 'te2');
+        $subquery2->fields('te2', array('parent'));
+        $subquery2->condition('te2.tid', $tids, $operator);
+        $subquery2->condition('te2.distance', $distance);
+        $subquery->condition('te.parent', $subquery2, 'IN');
+        $subquery->condition('te.distance', $distance, '<=');
+      }
     }
 
-    $this->query->add_where(0, "$this->table_alias.$this->real_field IN ($subquery$where  )", $args);
+    $this->query->add_where(0, "$this->table_alias.$this->real_field", $subquery, 'IN');
   }
+  
 }
