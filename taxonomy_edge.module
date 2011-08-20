@@ -186,7 +186,7 @@ function _taxonomy_edge_insert($tid, $parents) {
       // @todo Investigate missing argument!
       $rows += db_query("
         INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-        SELECT :tid, e1.parent, e1.distance + 1
+        SELECT DISTINCT :tid, e1.parent, e1.distance + 1
         FROM {taxonomy_term_edge} e1
         LEFT JOIN {taxonomy_term_edge} e2 ON e2.tid = :tid AND e2.parent = e1.parent
         WHERE e1.tid = :parent
@@ -246,7 +246,7 @@ function _taxonomy_edge_update($tid, $parents) {
   $args[] = $tid;
   db_query("
     INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-    SELECT te2.tid, te1.parent, te1.distance + te2.distance + 1
+    SELECT DISTINCT te2.tid, te1.parent, te1.distance + te2.distance + 1
     FROM {taxonomy_term_edge} te1
     INNER JOIN {taxonomy_term_edge} te2 ON te1.tid IN (" . $placeholders . ") AND te2.parent = :parent
     LEFT JOIN {taxonomy_term_edge} te3 ON te2.tid = te3.tid AND te1.parent = te3.parent
@@ -301,7 +301,7 @@ function taxonomy_edge_rebuild(&$context) {
 
   $total_rows = db_query("
     INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-    SELECT h.tid, h.tid, 0
+    SELECT DISTINCT h.tid, h.tid, 0
     FROM {taxonomy_term_hierarchy} h
     LEFT JOIN {taxonomy_term_edge} e ON e.tid = h.tid AND e.parent = h.tid
     WHERE h.tid <> 0
@@ -314,7 +314,7 @@ function taxonomy_edge_rebuild(&$context) {
   while ($max_depth-- > 0) {
     $result = db_query("
       INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-      SELECT h.tid, e.parent, :depth + 1
+      SELECT DISTINCT h.tid, e.parent, :depth + 1
       FROM {taxonomy_term_hierarchy} h
       INNER JOIN {taxonomy_term_edge} e ON e.tid = h.parent
       LEFT JOIN {taxonomy_term_edge} e2 ON e2.tid = h.tid AND e2.parent = e.parent
@@ -387,86 +387,6 @@ function taxonomy_edge_get_top_tid($tid) {
     WHERE h.parent = 0
     AND te.tid = :tid
   ", array($tid)));
-}
-
-/**
- * Reimplementation of taxonomy_select_nodes().
- * Uses the Taxonomy Edge table instead of cpu/mem (mostly mem) hungry taxonomy_get_tree().
- * @note This function also fixes the "broken" default order by from the taxonomy_select_nodes() function,
- *       by added "n.nid" to the ORDER BY clause. This is ensure consistent results on each query.
- *
- * @see taxonomy_select_nodes()
- */
-function taxonomy_edge_taxonomy_select_nodes($tids = array(), $operator = 'or', $depth = 0, $pager = TRUE, $order = 'n.sticky DESC, n.created DESC, n.nid DESC') {
-  // Fix broken default order by the Taxonomy Module.
-  // Ordering without a unique key could result in incosistent result sets,
-  // depending on which index (if any) the database decides to use for the query.
-  switch ($order) {
-    case 'n.sticky DESC, n.created DESC':
-      $order .= ', n.nid DESC';
-      break;
-    case 'n.sticky ASC, n.created ASC':
-      $order .= ', n.nid ASC';
-      break;
-  }
-
-  // If possible, use optimize by using GROUP BY instead of DISTINCT.
-  // This is what the idx_taxonomy_edge index is used for.
-  $group_by = '';
-  $distinct = 'DISTINCT(n.nid)';
-  switch ($order) {
-    case 'n.sticky DESC, n.created DESC, n.nid DESC':
-    case 'n.sticky ASC, n.created ASC, n.nid ASC':
-      $group_by = ' GROUP BY n.sticky, n.created, n.nid';
-      $distinct = 'n.nid';
-      break;
-    case 'n.created DESC, n.nid DESC':
-    case 'n.created ASC, n.nid ASC':
-      $group_by = ' GROUP BY n.created, n.nid';
-      $distinct = 'n.nid';
-      break;
-  }
-
-  if (count($tids) > 0) {
-    if ($operator == 'or') {
-      $args = $tids;
-      $placeholders = db_placeholders($args, 'int');
-      if ($depth === 'all') {
-        $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {taxonomy_term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
-        $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {taxonomy_term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND n.status = 1';
-      }
-      else {
-        $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {taxonomy_term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND te.distance <= %d AND n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
-        $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n INNER JOIN {term_node} tn ON n.vid = tn.vid JOIN {taxonomy_term_edge} te ON tn.tid = te.tid WHERE te.parent IN(' . $placeholders . ') AND te.distance <= %d AND n.status = 1';
-        $args[] = $depth;
-      }
-    }
-    else {
-      $join = '';
-      $args = array();
-      foreach ($tids as $index => $tid) {
-        $join .= ' INNER JOIN {term_node} tn' . $index . ' ON n.vid = tn' . $index . '.vid';
-        $join .= ' INNER JOIN {taxonomy_term_edge} te' . $index . ' ON tn' . $index . '.tid = te'. $index . '.tid AND te' . $index . '.parent = %d';
-        $args[] = $tid;
-        if ($depth !== 'all') {
-          $join .= ' AND te'. $index .'.distance <= %d';
-          $args[] = $depth;
-        }
-      }
-      $sql = 'SELECT ' . $distinct . ', n.sticky, n.title, n.created FROM {node} n ' . $join . ' WHERE n.status = 1 ' . $group_by . ' ORDER BY ' . $order;
-      $sql_count = 'SELECT COUNT(DISTINCT n.nid) FROM {node} n ' . $join . ' WHERE n.status = 1';
-    }
-    $sql = db_rewrite_sql($sql);
-    if ($pager) {
-      $sql_count = db_rewrite_sql($sql_count);
-      $result = pager_query($sql, variable_get('default_nodes_main', 10), 0, $sql_count, $args);
-    }
-    else {
-      $result = db_query_range($sql, $args, 0, variable_get('feed_default_items', 10));
-    }
-  }
-
-  return $result;
 }
 
 /**
