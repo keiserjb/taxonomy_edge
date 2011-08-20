@@ -70,29 +70,6 @@ function taxonomy_edge_menu() {
 }
 
 /**
- * Implementation of hook_taxonomy().
- *
- * Maintain edges upon taxonomy manipulation
- */
-function taxonomy_edge_taxonomy($op, $type, $array = NULL) {
-  $array = (array)$array;
-  switch ($type) {
-    case 'term':
-      switch ($op) {
-        case 'insert':
-          _taxonomy_edge_insert($array['tid'], $array['parent']);
-          break;
-        case 'update':
-          _taxonomy_edge_update($array['tid'], $array['parent']);
-          break;
-        case 'delete':
-          _taxonomy_edge_delete($array['tid']);
-          break;
-      }
-  }
-}
-
-/**
  * Implementation of hook_cronapi().
  * Regularly rebuild the edge list
  */
@@ -159,16 +136,11 @@ function taxonomy_edge_rebuild_finished($success, $result, $operations) {
 }
 
 /**
- * Insert edges for a term.
- *
- * @param $tid
- *   Term ID.
- * @param $parents
- *   Parent term IDs, either one integer or an array of integers.
- * @return integer/boolean
- *   Number of rows updated or FALSE if failed.
+ * Implements hook_taxonomy_insert().
  */
-function _taxonomy_edge_insert($tid, $parents) {
+function taxonomy_edge_taxonomy_insert($term) {
+  $tid = $term->tid;
+  $parents = $term->parents;
   if (!is_array($parents)) {
     $parents = array($parents);
   }
@@ -205,14 +177,11 @@ function _taxonomy_edge_insert($tid, $parents) {
 }
 
 /**
- * Move term in the edge list.
- *
- * @param $tid
- *   Term ID.
- * @param $parents
- *   Parent term IDs, either one integer or an array of integers.
+ * Implements hook_taxonomy_update().
  */
-function _taxonomy_edge_update($tid, $parents) {
+function taxonomy_edge_taxonomy_update($term) {
+  $tid = $term->tid;
+  $parents = $term->parents;
   if (!is_array($parents)) {
     $parents = array($parents);
   }
@@ -262,13 +231,10 @@ function _taxonomy_edge_update($tid, $parents) {
 }
 
 /**
- * Delete edges
- *
- * @param $tid
- *   Term ID.
+ * Implements hook_taxonomy_delete().
  */
-function _taxonomy_edge_delete($tid) {
-  db_query("DELETE FROM {taxonomy_term_edge} WHERE tid = :tid OR parent = :tid", array('tid' => $tid));
+function taxonomy_edge_taxonomy_delete($term) {
+  db_query("DELETE FROM {taxonomy_term_edge} WHERE tid = :tid OR parent = :tid", array('tid' => $term->tid));
 }
 
 
