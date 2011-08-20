@@ -136,15 +136,11 @@ function taxonomy_edge_rebuild_finished($success, $result, $operations) {
 }
 
 /**
- * Implements hook_taxonomy_insert().
+ * Implements hook_taxonomy_term_insert().
  */
-function taxonomy_edge_taxonomy_insert($term) {
+function taxonomy_edge_taxonomy_term_insert($term) {
   $tid = $term->tid;
-  $parents = $term->parents;
-  if (!is_array($parents)) {
-    $parents = array($parents);
-  }
-
+  $parents = isset($term->parent) ? $term->parent : array();
   watchdog('taxonomy_edge', 'Inserting taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
 
   if ($tid > 0) {
@@ -152,36 +148,39 @@ function taxonomy_edge_taxonomy_insert($term) {
       db_start_transaction();
     }
 
-    $rows += db_query("INSERT INTO {taxonomy_term_edge} (tid, parent, distance) VALUES(:tid1, :tid2, 0)", array(':tid1' => $tid, ':tid2' => $tid))->rowCount();
-
+    db_insert('taxonomy_term_edge')
+      ->fields(array(
+        'tid' => $tid,
+        'parent' => $tid,
+        'distance' => 0,
+      ))
+      ->execute();
+    
     foreach ($parents as $parent) {
-      // @todo Investigate missing argument!
-      $rows += db_query("
+      db_query("
         INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
         SELECT DISTINCT :tid, e1.parent, e1.distance + 1
         FROM {taxonomy_term_edge} e1
         LEFT JOIN {taxonomy_term_edge} e2 ON e2.tid = :tid AND e2.parent = e1.parent
         WHERE e1.tid = :parent
         AND e2.tid IS NULL
-      ", array(':tid' => $tid, ':parent' => $parent))->rowCount();
+      ", array(':tid' => $tid, ':parent' => $parent));
     }
     if (function_exists('db_end_transaction')) {
       db_end_transaction();
     }
-    return $rows;
   }
   else {
     watchdog('taxonomy_edge', 'Invalid term-id (%tid) received', array('%tid' => $tid), WATCHDOG_ERROR);
-    return FALSE;
   }
 }
 
 /**
- * Implements hook_taxonomy_update().
+ * Implements hook_taxonomy_term_update().
  */
-function taxonomy_edge_taxonomy_update($term) {
+function taxonomy_edge_taxonomy_term_update($term) {
   $tid = $term->tid;
-  $parents = $term->parents;
+  $parents = isset($term->parent) ? $term->parent : array();
   if (!is_array($parents)) {
     $parents = array($parents);
   }
@@ -210,14 +209,15 @@ function taxonomy_edge_taxonomy_update($term) {
   ");
 
   // Insert new and correct edges
-  $placeholders = db_placeholders($parents, 'int');
-  $args = $parents;
-  $args[] = $tid;
+  $args = array(
+    'parents' => $parents,
+    'tid' => $tid
+  );
   db_query("
     INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
     SELECT DISTINCT te2.tid, te1.parent, te1.distance + te2.distance + 1
     FROM {taxonomy_term_edge} te1
-    INNER JOIN {taxonomy_term_edge} te2 ON te1.tid IN (" . $placeholders . ") AND te2.parent = :parent
+    INNER JOIN {taxonomy_term_edge} te2 ON te1.tid IN (:parents) AND te2.parent = :tid
     LEFT JOIN {taxonomy_term_edge} te3 ON te2.tid = te3.tid AND te1.parent = te3.parent
     WHERE te3.tid IS NULL
   ", $args);
@@ -231,9 +231,9 @@ function taxonomy_edge_taxonomy_update($term) {
 }
 
 /**
- * Implements hook_taxonomy_delete().
+ * Implements hook_taxonomy_term_delete().
  */
-function taxonomy_edge_taxonomy_delete($term) {
+function taxonomy_edge_taxonomy_term_delete($term) {
   db_query("DELETE FROM {taxonomy_term_edge} WHERE tid = :tid OR parent = :tid", array('tid' => $term->tid));
 }
 
