@@ -144,9 +144,7 @@ function taxonomy_edge_taxonomy_term_insert($term) {
   watchdog('taxonomy_edge', 'Inserting taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
 
   if ($tid > 0) {
-    if (function_exists('db_start_transaction')) {
-      db_start_transaction();
-    }
+    $tx = db_transaction();
 
     db_insert('taxonomy_term_edge')
       ->fields(array(
@@ -166,9 +164,6 @@ function taxonomy_edge_taxonomy_term_insert($term) {
         AND e2.tid IS NULL
       ", array(':tid' => $tid, ':parent' => $parent));
     }
-    if (function_exists('db_end_transaction')) {
-      db_end_transaction();
-    }
   }
   else {
     watchdog('taxonomy_edge', 'Invalid term-id (%tid) received', array('%tid' => $tid), WATCHDOG_ERROR);
@@ -187,9 +182,7 @@ function taxonomy_edge_taxonomy_term_update($term) {
 
   watchdog('taxonomy_edge', 'Updating taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
 
-  if (function_exists('db_start_transaction')) {
-    db_start_transaction();
-  }
+  $tx = db_transaction();
 
   // Find invalid edges after move
   db_query("CREATE TEMPORARY TABLE {term_edge_delete} (tid INT(11), parent INT(11), PRIMARY KEY (`tid`, `parent`))");
@@ -224,10 +217,6 @@ function taxonomy_edge_taxonomy_term_update($term) {
 
   // Clean up
   db_query("DROP TEMPORARY TABLE {term_edge_delete}");
-
-  if (function_exists('db_end_transaction')) {
-    db_end_transaction();
-  }
 }
 
 /**
@@ -255,15 +244,11 @@ function taxonomy_edge_rebuild(&$context) {
   $time = microtime(TRUE);
   set_time_limit(86400);
 
-  if (function_exists('db_start_transaction')) {
-    db_start_transaction();
-    // TRUNCATE is not transaction safe on some DB's (at least MySQL).
-    db_query("DELETE FROM {taxonomy_term_edge}");
-  }
-  else {
-    // Use TRUNCATE if possible, much faster than DELETE FROM (if there are many rows).
-    db_query("TRUNCATE {taxonomy_term_edge}");
-  }
+  $tx = db_transaction();
+  
+  // Use delete, as truncate is not transaction safe on MySQL.
+  // @todo Investigate if db_truncate() is transaction safe.
+  db_delete('taxonomy_term_edge')->execute();
 
   $total_rows = db_query("
     INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
@@ -305,10 +290,6 @@ function taxonomy_edge_rebuild(&$context) {
     $context['finished'] += (1 - $context['finished']) / 2;
   }
   $context['finished'] = 1;
-
-  if (function_exists('db_end_transaction')) {
-    db_end_transaction();
-  }
   $context['results'] = array('rows' => $total_rows, 'depth' => $depth - 1, 'time' => microtime(TRUE) - $time);
   
   return $total_rows;
