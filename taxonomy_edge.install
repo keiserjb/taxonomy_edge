@@ -69,6 +69,32 @@ function taxonomy_edge_schema() {
     ),
   );
 
+  $schema['taxonomy_edge_queue'] = array(
+    'description' => 'Queue for edge operations.',
+    'fields' => array(
+      'uid' => array(
+        'description' => 'Unique ID',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'tid' => array(
+        'description' => 'Term ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'operation' => array(
+        'description' => 'Operation',
+        'type' => 'varchar',
+        'length' => 16,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('uid'),
+  );
+
   return $schema;
 }
 

@@ -467,6 +467,9 @@ function taxonomy_edge_get_top_tid($tid) {
  * @see taxonomy_get_tree()
  */
 function taxonomy_edge_get_tree($vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE) {
+  // @todo Use regular taxonomy_get_tree if realtime build is disabled, 
+  //       as this function might be unreliable.
+  
   $children = &drupal_static('taxonomy_get_tree', array());
   $parents = &drupal_static('taxonomy_get_tree' . ':parents', array());
   $terms = &drupal_static('taxonomy_get_tree' . ':terms', array());
