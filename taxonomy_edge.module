@@ -210,8 +210,8 @@ function taxonomy_edge_taxonomy_term_update($term) {
 
   // Insert new and correct edges
   $args = array(
-    'parents' => $parents,
-    'tid' => $tid
+    ':parents' => array_values($parents),
+    ':tid' => $tid
   );
   db_query("
     INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
@@ -357,7 +357,7 @@ function taxonomy_edge_get_top_tid($tid) {
 
 /**
  * Reimplementation of taxonomy_get_tree().
- * Limit db fetch to only specified parent and max_depth.
+ * Limit db fetch to only specified parent.
  * @see taxonomy_get_tree()
  */
 function taxonomy_edge_get_tree($vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE) {
@@ -389,11 +389,10 @@ function taxonomy_edge_get_tree($vid, $parent = 0, $max_depth = NULL, $load_enti
     $result = $query->execute();
 
     foreach ($result as $term) {
-      if (!isset($terms[$vid][$term->tid])) {
-        $children[$vid][$term->parent][] = $term->tid;
-        $parents[$vid][$term->tid][] = $term->parent;
-        $terms[$vid][$term->tid] = $term;
-      }
+      // @todo Fix potential bug with multiple calls to get_tree
+      $children[$vid][$term->parent][] = $term->tid;
+      $parents[$vid][$term->tid][] = $term->parent;
+      $terms[$vid][$term->tid] = $term;
     }
   }
 
