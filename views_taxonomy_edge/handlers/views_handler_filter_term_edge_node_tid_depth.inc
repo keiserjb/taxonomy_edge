@@ -59,12 +59,23 @@ class views_handler_filter_term_edge_node_tid_depth extends views_handler_filter
         $subquery->condition('te.distance', $this->options['depth'], '<');
       }
       elseif ($this->options['depth'] < 0) {
+        // Find max distance upwards
         $subquery2 = db_select('taxonomy_term_edge', 'te2')
-          ->fields('te2', array('parent'))
+          ->fields('te2', array('distance'))
           ->condition('te2.tid', $tids, $operator)
-          ->condition('te2.distance', abs($this->options['depth']), '<=');
+          ->condition('te2.distance', abs($this->options['depth']), '<=')
+          ->orderBy('te2.distance', 'DESC')
+          ->range(0, 1)
+          ->execute();
+        $distance = $subquery2->fetchField();
+
+        // Select upwards using parents
+        $subquery2 = db_select('taxonomy_term_edge', 'te2');
+        $subquery2->fields('te2', array('parent'));
+        $subquery2->condition('te2.tid', $tids, $operator);
+        $subquery2->condition('te2.distance', $distance);
         $subquery->condition('te.parent', $subquery2, 'IN');
-        $subquery->condition('te.distance', abs($this->options['depth']), '<=');
+        $subquery->condition('te.distance', $distance, '<=');
       }
     }
   }
