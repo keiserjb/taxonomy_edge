@@ -20,6 +20,12 @@ function taxonomy_edge_settings_form() {
     '#type' => 'textfield',
     '#default_value' => variable_get('taxonomy_edge_max_depth', TAXONOMY_EDGE_MAX_DEPTH),
   );
+  $form['taxonomy_edge_build_realtime'] = array(
+    '#title' => t('Build tree realtime'),
+    '#description' => t('Update tree upon taxonomy modification.'),
+    '#type' => 'checkbox',
+    '#default_value' => variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME),
+  );
 
   $form = system_settings_form($form);
   $form['buttons']['rebuild_edges'] = array(

@@ -6,17 +6,13 @@
  * This module makes it easier to do this, by maintaining a complete list of
  * edges for each term using the adjecency matrix graph theory.
  *
- * Currently only MySQL is supported.
- *
  * Example of getting all children from tid:14
  *
  * SELECT tid FROM {taxonomy_term_edge} WHERE parent = 14
  *
  * NOTE: Multiple parents are somewhat supported.
  *
- * @todo Convert to ANSI SQL (if possible) for compatibility with other databases than MySQL
- * @todo Use batch API for rebuild edges manually.
- * @todo Integrate with Views.
+ * @todo Fix concurrency issue for queue rebuild and full tree rebuild
  *
  * @see README.txt
  */
@@ -26,6 +22,10 @@
  */
 define('TAXONOMY_EDGE_MAX_DEPTH', 100);
 
+/**
+ * Default value for realtime building of tree.
+ */
+define('TAXONOMY_EDGE_BUILD_REALTIME', TRUE);
 
 
 
@@ -74,71 +74,86 @@ function taxonomy_edge_menu() {
  * Regularly rebuild the edge list
  */
 function taxonomy_edge_cronapi($op, $job = NULL) {
+  $cronapi_enabled = &drupal_static('taxonomy_edge_cronapi_enabled', FALSE);
+  $cronapi_enabled = TRUE;
   switch ($op) {
     case 'list':
-      return array('taxonomy_edge_rebuild_cron' => 'Rebuild taxonomy edges');
+      static $jobs = array(
+        'taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges',
+        'taxonomy_edge_cron_process_queue' => 'Process rebuild queue'
+      );
+      return $jobs;
     case 'rule':
-      return '0 2 * * *';
-  }
-}
-
-
-
-
-// ---------- PRIVATE HELPER FUNCTIONS ----------
-
-/**
- * Rebuild edges
- */
-function taxonomy_edge_rebuild_cron() {
-  $context = array();
-  $rows = taxonomy_edge_rebuild($context);
-  if (is_numeric($rows)) {
-    return TRUE;
-  }
-  else {
-    return FALSE;
+      static $rules = array(
+        'taxonomy_edge_cron_rebuild' => '0 2 * * *',
+        'taxonomy_edge_cron_process_queue' => '* * * * *',
+      );
+      return isset($rules[$job]) ? $rules[$job] : '';
   }
 }
 
 /**
- * Start batch job for rebuild of edges
+ * Implements hook_cron().
  */
-function taxonomy_edge_rebuild_batch() {
-  $batch = array(
-    'operations' => array(
-      array('taxonomy_edge_rebuild', array())
-    ),
-    'finished' => 'taxonomy_edge_rebuild_finished',
-    'file' => drupal_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.pages.inc',
-    'title' => t('Rebuilding taxonomy edges'),
-    'init_message' => t('Rebuilding taxonomy edges'),
-  );
-  batch_set($batch);
-}
+function taxonony_edge_cron() {
+  // Don't run jobs twice! Check if hook_cronapi is supported on this system.
+  $cronapi_enabled = &drupal_static('taxonomy_edge_cronapi_enabled', FALSE);
+  if ($cronapi_enabled) {
+    return;
+  }
 
-/**
- * Finished function for rebuild tree batch operation.
- *
- * @param type $success
- * @param type $result
- * @param type $operations 
- */
-function taxonomy_edge_rebuild_finished($success, $result, $operations) {
-  if ($success) {
-    drupal_set_message(t('Taxonomy edges rebuilt: %rows processed with depth %depth in %time seconds', 
-      array('%rows' => $result['rows'], '%depth' => $result['depth'], '%time' => sprintf("%.03f", $result['time'])))
-    );
-  }
-  else {
-    drupal_set_message(t('Taxonomy edges rebuilt: FAILED'), 'error');
-  }
+  // Only process queue on regular cron systems... don't rebuild entire tree.
+  taxonomy_edge_cron_process_queue();
 }
 
 /**
  * Implements hook_taxonomy_term_insert().
  */
 function taxonomy_edge_taxonomy_term_insert($term) {
+  if (variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME)) {
+    return _taxonomy_edge_taxonomy_term_insert($term);
+  }
+  else {
+    _taxonomy_edge_taxonomy_term_queue($term, 'insert');
+    taxonomy_edge_trigger_queue_processing();
+  }
+}
+
+/**
+ * Implements hook_taxonomy_term_update().
+ */
+function taxonomy_edge_taxonomy_term_update($term) {
+  if (variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME)) {
+    return _taxonomy_edge_taxonomy_term_update($term);
+  }
+  else {
+    _taxonomy_edge_taxonomy_term_queue($term, 'update');
+    taxonomy_edge_trigger_queue_processing();
+  }
+}
+
+/**
+ * Implements hook_taxonomy_term_delete().
+ */
+function taxonomy_edge_taxonomy_term_delete($term) {
+  if (variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME)) {
+    return _taxonomy_edge_taxonomy_term_delete($term);
+  }
+  else {
+    _taxonomy_edge_taxonomy_term_queue($term, 'delete');
+    taxonomy_edge_trigger_queue_processing();
+  }
+}
+
+
+// ---------- PRIVATE HELPER FUNCTIONS ----------
+
+/**
+ * Insert a term into the edge tree.
+ *
+ * @param type $term 
+ */
+function _taxonomy_edge_taxonomy_term_insert($term) {
   $tid = $term->tid;
   $parents = isset($term->parent) ? $term->parent : array();
   watchdog('taxonomy_edge', 'Inserting taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
@@ -171,14 +186,13 @@ function taxonomy_edge_taxonomy_term_insert($term) {
 }
 
 /**
- * Implements hook_taxonomy_term_update().
+ * Insert a term into the edge tree.
+ *
+ * @param type $term 
  */
-function taxonomy_edge_taxonomy_term_update($term) {
+function _taxonomy_edge_taxonomy_term_update($term) {
   $tid = $term->tid;
   $parents = isset($term->parent) ? $term->parent : array();
-  if (!is_array($parents)) {
-    $parents = array($parents);
-  }
 
   watchdog('taxonomy_edge', 'Updating taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
 
@@ -220,16 +234,127 @@ function taxonomy_edge_taxonomy_term_update($term) {
 }
 
 /**
- * Implements hook_taxonomy_term_delete().
+ * Delete a term from the edge tree.
  */
-function taxonomy_edge_taxonomy_term_delete($term) {
+function _taxonomy_edge_taxonomy_term_delete($term) {
   db_query("DELETE FROM {taxonomy_term_edge} WHERE tid = :tid OR parent = :tid", array('tid' => $term->tid));
 }
 
-
-
+/**
+ * Queue an operation for the edge tree.
+ *
+ * @param type $term
+ * @param type $op
+ *   insert, update or delete
+ */
+function _taxonomy_edge_taxonomy_term_queue($term, $op) {
+  db_insert('taxonomy_edge_queue')
+    ->fields(array(
+      'tid' => $term->tid,
+      'operation' => $op,
+    ))
+    ->execute();
+}
 
 // ---------- PUBLIC HELPER FUNCTIONS ----------
+
+/**
+ * Rebuild edges
+ */
+function taxonomy_edge_cron_rebuild() {
+  $context = array();
+  $rows = taxonomy_edge_rebuild($context);
+  if (is_numeric($rows)) {
+    return TRUE;
+  }
+  else {
+    return FALSE;
+  }
+}
+
+/**
+ * Process the actual queue.
+ * Takes 100 tids per run.
+ */
+function taxonomy_edge_cron_process_queue() {
+  if (lock_acquire('taxonomy_edge_process_queue')) {
+    do {
+      $terms = db_select('taxonomy_edge_queue', 'tq')
+        ->fields('tq', array('uid', 'tid', 'operation'))
+        ->orderBy('uid')
+        ->range(0, 100)
+        ->execute()
+        ->fetchAll();
+      if (count($terms) > 0) {
+        foreach ($terms as $term) {
+          $term->parent = db_select('taxonomy_term_hierarchy', 'th')
+                             ->fields('th', array('parent'))
+                             ->condition('th.tid', $term->tid)
+                             ->execute()
+                             ->fetchAll(PDO::FETCH_COLUMN, 'parent');
+          switch ($term->operation) {
+            case 'insert':
+              _taxonomy_edge_taxonomy_term_insert($term);
+              break;
+            case 'update':
+              _taxonomy_edge_taxonomy_term_update($term);
+              break;
+            case 'delete':
+              _taxonomy_edge_taxonomy_term_delete($term);
+              break;
+          }
+          $uid = $term->uid;
+        }
+        db_delete('taxonomy_edge_queue')
+          ->condition('uid', $uid, '<=')
+          ->execute();
+      }
+    } while (count($terms));
+  }
+}
+
+/**
+ * Start batch job for rebuild of edges
+ */
+function taxonomy_edge_rebuild_batch() {
+  $batch = array(
+    'operations' => array(
+      array('taxonomy_edge_rebuild', array())
+    ),
+    'finished' => 'taxonomy_edge_rebuild_finished',
+    'file' => drupal_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.pages.inc',
+    'title' => t('Rebuilding taxonomy edges'),
+    'init_message' => t('Rebuilding taxonomy edges'),
+  );
+  batch_set($batch);
+}
+
+/**
+ * Finished function for rebuild tree batch operation.
+ *
+ * @param type $success
+ * @param type $result
+ * @param type $operations 
+ */
+function taxonomy_edge_rebuild_finished($success, $result, $operations) {
+  if ($success) {
+    drupal_set_message(t('Taxonomy edges rebuilt: %rows processed with depth %depth in %time seconds', 
+      array('%rows' => $result['rows'], '%depth' => $result['depth'], '%time' => sprintf("%.03f", $result['time'])))
+    );
+  }
+  else {
+    drupal_set_message(t('Taxonomy edges rebuilt: FAILED'), 'error');
+  }
+}
+
+/**
+ * Process queue in background.
+ */
+function taxonomy_edge_trigger_queue_processing() {
+  if (module_exists('background_process')) {
+    background_process_start_locked('taxonomy_edge_queue', 'taxonomy_edge_cron_process_queue');
+  }
+}
 
 /**
  * Rebuild entire edge list.
@@ -370,9 +495,10 @@ function taxonomy_edge_get_tree($vid, $parent = 0, $max_depth = NULL, $load_enti
     $result = $query->execute();
 
     foreach ($result as $term) {
-      // @todo Fix potential bug with multiple calls to get_tree
-      $children[$vid][$term->parent][] = $term->tid;
-      $parents[$vid][$term->tid][] = $term->parent;
+      // @todo Optimize this. Using tids as index protects us from multiple
+      //       calls at the expense of performance on large trees.
+      $children[$vid][$term->parent][$term->tid] = $term->tid;
+      $parents[$vid][$term->tid][$term->parent] = $term->parent;
       $terms[$vid][$term->tid] = $term;
     }
   }
