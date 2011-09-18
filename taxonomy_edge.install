@@ -12,7 +12,7 @@ function taxonomy_edge_install() {
   _taxonomy_edge_install();
   drupal_set_message(st('Taxonomy Edge is now installed. Add the provided patch to the core module Taxonomy module for better performance.'));
   drupal_set_message(st('Taxonomy Edge settings are available under !link',
-    array('!link' => l(st('Administer > Content > Taxonomy'), 'admin/content/taxonomy/edge'))
+    array('!link' => l(st('Administer > Structure > Taxonomy'), 'admin/content/taxonomy/edge'))
   ));
 }
 
