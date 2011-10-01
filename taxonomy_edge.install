@@ -72,13 +72,6 @@ function taxonomy_edge_schema() {
   return $schema;
 }
 
-/**
- * Use DrupalQueue instead of custom queue. Remove table: taxonomy_edge_queue.
- */
-function taxonomy_edge_update_7000() {
-  db_drop_table('taxonomy_edge_queue');
-}
-
 function _taxonomy_edge_install() {
   db_add_index('node', 'idx_taxonomy_edge', array('sticky', 'created', 'nid'));
   // db_add_index('term_node', 'idx_taxonomy_edge', array('vid', 'tid'));
