@@ -119,24 +119,6 @@ function taxonomy_edge_cron_queue_info_alter(&$queues) {
 }
 
 /**
- * Process edge for a queued term.
- * @param type $term 
- */
-function taxonomy_edge_process_queue_item($term) {
-  switch ($term->operation) {
-    case 'insert':
-      _taxonomy_edge_taxonomy_term_insert($term);
-      break;
-    case 'update':
-      _taxonomy_edge_taxonomy_term_update($term);
-      break;
-    case 'delete':
-      _taxonomy_edge_taxonomy_term_delete($term);
-      break;
-  }
-}
-
-/**
  * Implements hook_taxonomy_term_insert().
  */
 function taxonomy_edge_taxonomy_term_insert($term) {
@@ -173,22 +155,94 @@ function taxonomy_edge_taxonomy_term_delete($term) {
 }
 
 /**
- * Checks if it's possible to build an edge realtime.
+ * Hook into the drag'n'drop interface of terms in order to update tree when
+ * terms are reordered.
  *
- * @return boolean
- *   TRUE if possible, FALSE if not.
+ * @param array $form
+ * @param type $form_state 
  */
-function taxonomy_edge_build_realtime() {
-  $queue = DrupalQueue::get('taxonomy_edge', TRUE);
-  if ($queue->numberOfItems()) {
-    // Don't build realtime, if there are still items left in the queue.
-    return FALSE;
+function taxonomy_edge_form_taxonomy_overview_terms_alter(&$form, &$form_state) {
+  $form['#submit'][] = 'taxonomy_edge_reorder_submit';
+}
+
+/**
+ * Copy/paste from core taxonomy module.
+ * This is the penalty for not having a proper abstraction layer!
+ * And for not invoking update hook on terms when changing their parents!
+ *
+ * @param type $form
+ * @param type $form_state
+ * @return type 
+ */
+function taxonomy_edge_reorder_submit($form, &$form_state) {
+  $vocabulary = $form['#vocabulary'];
+  $hierarchy = 0; // Update the current hierarchy type as we go.
+
+  $changed_terms = array();
+  $tree = taxonomy_get_tree($vocabulary->vid);
+
+  if (empty($tree)) {
+    return;
   }
-  if (!lock_may_be_available('taxonomy_edge_rebuild')) {
-    // Don't build realtime, if entire tree rebuild is in progress.
-    return FALSE;
+
+  // Build a list of all terms that need to be updated on previous pages.
+  $weight = 0;
+  $term = (array) $tree[0];
+  while ($term['tid'] != $form['#first_tid']) {
+    if ($term['parents'][0] == 0 && $term['weight'] != $weight) {
+      $term['parent'] = $term['parents'][0];
+      $term['weight'] = $weight;
+      $changed_terms[$term['tid']] = $term;
+    }
+    $weight++;
+    $hierarchy = $term['parents'][0] != 0 ? 1 : $hierarchy;
+    $term = (array) $tree[$weight];
   }
-  return variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME);
+
+  // Renumber the current page weights and assign any new parents.
+  $level_weights = array();
+  foreach ($form_state['values'] as $tid => $values) {
+    if (isset($form[$tid]['#term'])) {
+      $term = $form[$tid]['#term'];
+      // Give terms at the root level a weight in sequence with terms on previous pages.
+      if ($values['parent'] == 0 && $term['weight'] != $weight) {
+        $term['weight'] = $weight;
+        $changed_terms[$term['tid']] = $term;
+      }
+      // Terms not at the root level can safely start from 0 because they're all on this page.
+      elseif ($values['parent'] > 0) {
+        $level_weights[$values['parent']] = isset($level_weights[$values['parent']]) ? $level_weights[$values['parent']] + 1 : 0;
+        if ($level_weights[$values['parent']] != $term['weight']) {
+          $term['weight'] = $level_weights[$values['parent']];
+          $changed_terms[$term['tid']] = $term;
+        }
+      }
+      // Update any changed parents.
+      if ($values['parent'] != $term['parent']) {
+        $term['parent'] = $values['parent'];
+        $changed_terms[$term['tid']] = $term;
+      }
+      $hierarchy = $term['parent'] != 0 ? 1 : $hierarchy;
+      $weight++;
+    }
+  }
+
+  // Build a list of all terms that need to be updated on following pages.
+  for ($weight; $weight < count($tree); $weight++) {
+    $term = (array) $tree[$weight];
+    if ($term['parents'][0] == 0 && $term['weight'] != $weight) {
+      $term['parent'] = $term['parents'][0];
+      $term['weight'] = $weight;
+      $changed_terms[$term['tid']] = $term;
+    }
+    $hierarchy = $term['parents'][0] != 0 ? 1 : $hierarchy;
+  }
+  // Save all updated terms.
+  foreach ($changed_terms as $changed) {
+    $term = (object) $changed;
+    $term->parent = array($term->parent);
+    _taxonomy_edge_taxonomy_term_update($term);
+  }
 }
 
 // ---------- PRIVATE HELPER FUNCTIONS ----------
@@ -302,6 +356,24 @@ function _taxonomy_edge_taxonomy_term_queue($term, $op) {
 }
 
 // ---------- PUBLIC HELPER FUNCTIONS ----------
+
+/**
+ * Process edge for a queued term.
+ * @param type $term 
+ */
+function taxonomy_edge_process_queue_item($term) {
+  switch ($term->operation) {
+    case 'insert':
+      _taxonomy_edge_taxonomy_term_insert($term);
+      break;
+    case 'update':
+      _taxonomy_edge_taxonomy_term_update($term);
+      break;
+    case 'delete':
+      _taxonomy_edge_taxonomy_term_delete($term);
+      break;
+  }
+}
 
 /**
  * Rebuild edges
@@ -468,6 +540,25 @@ function taxonomy_edge_get_top_tid($tid) {
     WHERE h.parent = 0
     AND te.tid = :tid
   ", array($tid)));
+}
+
+/**
+ * Checks if it's possible to build an edge realtime.
+ *
+ * @return boolean
+ *   TRUE if possible, FALSE if not.
+ */
+function taxonomy_edge_build_realtime() {
+  $queue = DrupalQueue::get('taxonomy_edge', TRUE);
+  if ($queue->numberOfItems()) {
+    // Don't build realtime, if there are still items left in the queue.
+    return FALSE;
+  }
+  if (!lock_may_be_available('taxonomy_edge_rebuild')) {
+    // Don't build realtime, if entire tree rebuild is in progress.
+    return FALSE;
+  }
+  return variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME);
 }
 
 /**
