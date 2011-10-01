@@ -45,8 +45,13 @@ function taxonomy_edge_help($section) {
 /**
  * Implementation of hook_perm().
  */
-function taxonomy_edge_perm() {
-  return array('administer taxonomy edge');
+function taxonomy_edge_permission() {
+  return array(
+    'administer taxonomy edge' => array(
+      'title' => t('Administer Taxonomy Edge'),
+      'description' => t('Perform administration tasks for Taxonomy Edge.'),
+    )
+  );
 }
 
 /**
@@ -80,42 +85,66 @@ function taxonomy_edge_cronapi($op, $job = NULL) {
     case 'list':
       static $jobs = array(
         'taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges',
-        'taxonomy_edge_cron_process_queue' => 'Process rebuild queue'
       );
       return $jobs;
     case 'rule':
       static $rules = array(
         'taxonomy_edge_cron_rebuild' => '0 2 * * *',
-        'taxonomy_edge_cron_process_queue' => '* * * * *',
       );
       return isset($rules[$job]) ? $rules[$job] : '';
   }
 }
 
 /**
- * Implements hook_cron().
+ * Implements hook_cron_queue_info().
  */
-function taxonony_edge_cron() {
-  // Don't run jobs twice! Check if hook_cronapi is supported on this system.
-  $cronapi_enabled = &drupal_static('taxonomy_edge_cronapi_enabled', FALSE);
-  if ($cronapi_enabled) {
-    return;
-  }
+function taxonomy_edge_cron_queue_info() {
+  $queues['taxonomy_edge'] = array(
+    'worker callback' => 'taxonomy_edge_process_queue_item',
+    'time' => 60,
+  );
+  return $queues;
+}
 
-  // Only process queue on regular cron systems... don't rebuild entire tree.
-  taxonomy_edge_cron_process_queue();
+/**
+ * Implements hook_cron_queue_info_alter().
+ */
+function taxonomy_edge_cron_queue_info_alter(&$queues) {
+  // If a rebuild is in progress, don't process queue before it's finished.
+  // The only I've found to do this, is to remove the queue from cron, as
+  // items otherwise would be lost.
+  if (!lock_may_be_available('taxonomy_edge_rebuild')) {
+    unset($queues['taxonomy_edge']);
+  }
+}
+
+/**
+ * Process edge for a queued term.
+ * @param type $term 
+ */
+function taxonomy_edge_process_queue_item($term) {
+  switch ($term->operation) {
+    case 'insert':
+      _taxonomy_edge_taxonomy_term_insert($term);
+      break;
+    case 'update':
+      _taxonomy_edge_taxonomy_term_update($term);
+      break;
+    case 'delete':
+      _taxonomy_edge_taxonomy_term_delete($term);
+      break;
+  }
 }
 
 /**
  * Implements hook_taxonomy_term_insert().
  */
 function taxonomy_edge_taxonomy_term_insert($term) {
-  if (variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME)) {
+  if (taxonomy_edge_build_realtime()) {
     return _taxonomy_edge_taxonomy_term_insert($term);
   }
   else {
     _taxonomy_edge_taxonomy_term_queue($term, 'insert');
-    taxonomy_edge_trigger_queue_processing();
   }
 }
 
@@ -123,12 +152,11 @@ function taxonomy_edge_taxonomy_term_insert($term) {
  * Implements hook_taxonomy_term_update().
  */
 function taxonomy_edge_taxonomy_term_update($term) {
-  if (variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME)) {
+  if (taxonomy_edge_build_realtime()) {
     return _taxonomy_edge_taxonomy_term_update($term);
   }
   else {
     _taxonomy_edge_taxonomy_term_queue($term, 'update');
-    taxonomy_edge_trigger_queue_processing();
   }
 }
 
@@ -136,15 +164,32 @@ function taxonomy_edge_taxonomy_term_update($term) {
  * Implements hook_taxonomy_term_delete().
  */
 function taxonomy_edge_taxonomy_term_delete($term) {
-  if (variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME)) {
+  if (taxonomy_edge_build_realtime()) {
     return _taxonomy_edge_taxonomy_term_delete($term);
   }
   else {
     _taxonomy_edge_taxonomy_term_queue($term, 'delete');
-    taxonomy_edge_trigger_queue_processing();
   }
 }
 
+/**
+ * Checks if it's possible to build an edge realtime.
+ *
+ * @return boolean
+ *   TRUE if possible, FALSE if not.
+ */
+function taxonomy_edge_build_realtime() {
+  $queue = DrupalQueue::get('taxonomy_edge', TRUE);
+  if ($queue->numberOfItems()) {
+    // Don't build realtime, if there are still items left in the queue.
+    return FALSE;
+  }
+  if (!lock_may_be_available('taxonomy_edge_rebuild')) {
+    // Don't build realtime, if entire tree rebuild is in progress.
+    return FALSE;
+  }
+  return variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME);
+}
 
 // ---------- PRIVATE HELPER FUNCTIONS ----------
 
@@ -248,12 +293,12 @@ function _taxonomy_edge_taxonomy_term_delete($term) {
  *   insert, update or delete
  */
 function _taxonomy_edge_taxonomy_term_queue($term, $op) {
-  db_insert('taxonomy_edge_queue')
-    ->fields(array(
-      'tid' => $term->tid,
-      'operation' => $op,
-    ))
-    ->execute();
+  // Wait for rebuild to clear queue and initiate snapshot of term_hierarchy
+  if (lock_may_be_available('taxonomy_edge_rebuild') || lock_wait('taxonomy_edge_rebuild', 2)) {
+    $queue = DrupalQueue::get('taxonomy_edge', TRUE);
+    $term->operation = $op;
+    $queue->createItem($term);
+  }
 }
 
 // ---------- PUBLIC HELPER FUNCTIONS ----------
@@ -269,47 +314,6 @@ function taxonomy_edge_cron_rebuild() {
   }
   else {
     return FALSE;
-  }
-}
-
-/**
- * Process the actual queue.
- * Takes 100 tids per run.
- */
-function taxonomy_edge_cron_process_queue() {
-  if (lock_acquire('taxonomy_edge_process_queue')) {
-    do {
-      $terms = db_select('taxonomy_edge_queue', 'tq')
-        ->fields('tq', array('uid', 'tid', 'operation'))
-        ->orderBy('uid')
-        ->range(0, 100)
-        ->execute()
-        ->fetchAll();
-      if (count($terms) > 0) {
-        foreach ($terms as $term) {
-          $term->parent = db_select('taxonomy_term_hierarchy', 'th')
-                             ->fields('th', array('parent'))
-                             ->condition('th.tid', $term->tid)
-                             ->execute()
-                             ->fetchAll(PDO::FETCH_COLUMN, 'parent');
-          switch ($term->operation) {
-            case 'insert':
-              _taxonomy_edge_taxonomy_term_insert($term);
-              break;
-            case 'update':
-              _taxonomy_edge_taxonomy_term_update($term);
-              break;
-            case 'delete':
-              _taxonomy_edge_taxonomy_term_delete($term);
-              break;
-          }
-          $uid = $term->uid;
-        }
-        db_delete('taxonomy_edge_queue')
-          ->condition('uid', $uid, '<=')
-          ->execute();
-      }
-    } while (count($terms));
   }
 }
 
@@ -348,15 +352,6 @@ function taxonomy_edge_rebuild_finished($success, $result, $operations) {
 }
 
 /**
- * Process queue in background.
- */
-function taxonomy_edge_trigger_queue_processing() {
-  if (module_exists('background_process')) {
-    background_process_start_locked('taxonomy_edge_queue', 'taxonomy_edge_cron_process_queue');
-  }
-}
-
-/**
  * Rebuild entire edge list.
  *
  * @return integer
@@ -366,10 +361,24 @@ function taxonomy_edge_rebuild(&$context) {
   $depth = 0;
   $max_depth = variable_get('taxonomy_edge_max_depth', TAXONOMY_EDGE_MAX_DEPTH);
 
+  // Acquire lock to avoid conflicts with queue
+  if (!lock_acquire('taxonomy_edge_rebuild')) {
+    $context['success'] = FALSE;
+    $context['message'] = t('Could not acquire lock!');
+    return;
+  }
+
+  // Clear the queue, we're rebulding anyways ...
+  $queue = DrupalQueue::get('taxonomy_edge', TRUE);
+  $queue->deleteQueue();
+  
   $time = microtime(TRUE);
   set_time_limit(86400);
 
+  // Please use a proper isolation level, so that transaction provides us with a
+  // snapshot
   $tx = db_transaction();
+  lock_release('taxonomy_edge_rebuild');
   
   // Use delete, as truncate is not transaction safe on MySQL.
   // @todo Investigate if db_truncate() is transaction safe.
