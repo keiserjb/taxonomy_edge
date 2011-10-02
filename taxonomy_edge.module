@@ -374,8 +374,10 @@ function taxonomy_edge_process_queue_item($term) {
  * Rebuild edges
  */
 function taxonomy_edge_cron_rebuild() {
-  $context = array();
-  taxonomy_edge_rebuild($context);
+  taxonomy_edge_rebuild_batch();
+  $batch = &batch_get();
+  $batch['progressive'] = FALSE;
+  batch_process('admin/content/taxonomy/edge');
 }
 
 /**
