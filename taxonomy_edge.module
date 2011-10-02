@@ -79,19 +79,11 @@ function taxonomy_edge_menu() {
  * Regularly rebuild the edge list
  */
 function taxonomy_edge_cronapi($op, $job = NULL) {
-  $cronapi_enabled = &drupal_static('taxonomy_edge_cronapi_enabled', FALSE);
-  $cronapi_enabled = TRUE;
   switch ($op) {
     case 'list':
-      static $jobs = array(
-        'taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges',
-      );
-      return $jobs;
+      return array('taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges');
     case 'rule':
-      static $rules = array(
-        'taxonomy_edge_cron_rebuild' => '0 2 * * *',
-      );
-      return isset($rules[$job]) ? $rules[$job] : '';
+      return '0 2 * * *';
   }
 }
 
@@ -285,7 +277,7 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
 }
 
 /**
- * Insert a term into the edge tree.
+ * Update a term in the edge tree.
  *
  * @param type $term 
  */
@@ -334,6 +326,9 @@ function _taxonomy_edge_taxonomy_term_update($term) {
 
 /**
  * Delete a term from the edge tree.
+ *
+ *  * @param $tid
+ *   Term ID.
  */
 function _taxonomy_edge_taxonomy_term_delete($term) {
   db_query("DELETE FROM {taxonomy_term_edge} WHERE tid = :tid OR parent = :tid", array('tid' => $term->tid));
@@ -380,13 +375,7 @@ function taxonomy_edge_process_queue_item($term) {
  */
 function taxonomy_edge_cron_rebuild() {
   $context = array();
-  $rows = taxonomy_edge_rebuild($context);
-  if (is_numeric($rows)) {
-    return TRUE;
-  }
-  else {
-    return FALSE;
-  }
+  taxonomy_edge_rebuild($context);
 }
 
 /**
@@ -440,12 +429,12 @@ function taxonomy_edge_rebuild(&$context) {
     return;
   }
 
+  $time = microtime(TRUE);
+  set_time_limit(86400);
+
   // Clear the queue, we're rebulding anyways ...
   $queue = DrupalQueue::get('taxonomy_edge', TRUE);
   $queue->deleteQueue();
-  
-  $time = microtime(TRUE);
-  set_time_limit(86400);
 
   // Please use a proper isolation level, so that transaction provides us with a
   // snapshot
@@ -484,19 +473,19 @@ function taxonomy_edge_rebuild(&$context) {
     if (!$result) {
       break;
     }
-    $depth++;
 
     $rows = $result->rowCount();
     if ($rows <= 0) {
       break;
     }
+    $depth++;
 
     $total_rows += $rows;
     $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
     $context['finished'] += (1 - $context['finished']) / 2;
   }
   $context['finished'] = 1;
-  $context['results'] = array('rows' => $total_rows, 'depth' => $depth - 1, 'time' => microtime(TRUE) - $time);
+  $context['results'] = array('rows' => $total_rows, 'depth' => $depth, 'time' => microtime(TRUE) - $time);
   
   return $total_rows;
 }
@@ -518,7 +507,7 @@ function taxonomy_edge_get_parents($tid) {
     AND e.distance > 0
     ORDER BY e.distance
   ", array($tid));
-  while ($parent = db_fetch_object($result)) {
+  while ($parent = $result->fetchObject()) {
     $parents[] = $parent;
   }
   return $parents;
@@ -539,7 +528,7 @@ function taxonomy_edge_get_top_tid($tid) {
     INNER JOIN {taxonomy_term_hierarchy} h ON te.parent = h.tid
     WHERE h.parent = 0
     AND te.tid = :tid
-  ", array($tid)));
+  ", array(':tid' => $tid)));
 }
 
 /**
