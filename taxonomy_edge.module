@@ -283,7 +283,40 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
  */
 function _taxonomy_edge_taxonomy_term_update($term) {
   $tid = $term->tid;
-  $parents = isset($term->parent) ? $term->parent : array();
+
+  if (!isset($term->parent)) {
+    // Parent not set, no need to update hierarchy.
+    return;
+  }
+
+  // Derive proper parent.
+  // If array is empty, the Taxonomy Module completely removes the term from
+  // term_hierarchy? Assuming for now, that this is a bug, since the term and
+  // its children are inaccessible from Drupal. We'll assume parent 0 to
+  // compensate. (parent 0 in tax-edge = no rows).
+  $parents = is_numeric($term->parent) ? array($term->parent) : $term->parent;
+  $parents = is_array($parents) ? $parents : array();
+  
+  // @todo Test (and benchmark?) below code. Compares old parents to new 
+  //       parents, and skips update of hierarchy if no change.
+/*
+  // Get old parents.
+  $old_parents = array();
+  $result = db_select('term_hierarchy', 'h')
+              ->fields('h', 'parent')
+              ->condition('h.tid', $tid)
+              ->orderBy('h.parent')
+              ->execute();
+  while ($parent = $result->fetchColumn()) {
+    $old_parents[] = $parent;
+  }
+
+  // Don't bother processing hierarchy if there's no change in parents.
+  sort($parents);
+  if ($parents == $old_parents) {
+    return;
+  }
+*/
 
   watchdog('taxonomy_edge', 'Updating taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
 
@@ -306,19 +339,21 @@ function _taxonomy_edge_taxonomy_term_update($term) {
     JOIN {term_edge_delete} ed ON e.tid = ed.tid AND e.parent = ed.parent
   ");
 
-  // Insert new and correct edges
-  $args = array(
-    ':parents' => array_values($parents),
-    ':tid' => $tid
-  );
-  db_query("
-    INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-    SELECT DISTINCT te2.tid, te1.parent, te1.distance + te2.distance + 1
-    FROM {taxonomy_term_edge} te1
-    INNER JOIN {taxonomy_term_edge} te2 ON te1.tid IN (:parents) AND te2.parent = :tid
-    LEFT JOIN {taxonomy_term_edge} te3 ON te2.tid = te3.tid AND te1.parent = te3.parent
-    WHERE te3.tid IS NULL
-  ", $args);
+  if ($parents) {
+    // Insert new and correct edges
+    $args = array(
+      ':parents' => array_values($parents),
+      ':tid' => $tid
+    );
+    db_query("
+      INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
+      SELECT DISTINCT te2.tid, te1.parent, te1.distance + te2.distance + 1
+      FROM {taxonomy_term_edge} te1
+      INNER JOIN {taxonomy_term_edge} te2 ON te1.tid IN (:parents) AND te2.parent = :tid
+      LEFT JOIN {taxonomy_term_edge} te3 ON te2.tid = te3.tid AND te1.parent = te3.parent
+      WHERE te3.tid IS NULL
+    ", $args);
+  }
 
   // Clean up
   db_query("DROP TEMPORARY TABLE {term_edge_delete}");
