@@ -84,6 +84,8 @@ function taxonomy_edge_cronapi($op, $job = NULL) {
       return array('taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges');
     case 'rule':
       return '0 2 * * *';
+    case 'settings':
+      return array('enabled' => FALSE);
   }
 }
 
