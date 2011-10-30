@@ -268,7 +268,7 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
     foreach ($parents as $parent) {
       db_query("
         INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-        SELECT DISTINCT :tid, e1.parent, e1.distance + 1
+        SELECT DISTINCT :tid AS tid, e1.parent, e1.distance + 1 AS distance
         FROM {taxonomy_term_edge} e1
         LEFT JOIN {taxonomy_term_edge} e2 ON e2.tid = :tid AND e2.parent = e1.parent
         WHERE e1.tid = :parent
@@ -379,7 +379,7 @@ function _taxonomy_edge_unify_parents($parents) {
         $new_parents[] = $new;
       }
     }
-    else {
+    elseif ($parent) {
       $new_parents[] = $parent;
     }
   }
