@@ -311,7 +311,7 @@ function _taxonomy_edge_taxonomy_term_update($term) {
   // @todo Fix this by adding a unique id per row in term_edge, so a sub-select can be used?
   $using = "{$tablename}";
   $db_type = Database::getConnection('default')->databaseType();
-  if ($db_type == 'mysql') {
+  if ($db_type == 'mysql' || $db_type == 'mysqli') {
     $using .= ', {taxonomy_term_edge}';
   }
   db_query("
