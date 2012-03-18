@@ -1,6 +1,6 @@
---- modules/taxonomy/taxonomy.module.orig	2012-03-18 19:24:09.000000000 +0100
+--- modules/taxonomy/taxonomy.module.orig	2011-08-31 20:55:34.000000000 +0200
 +++ modules/taxonomy/taxonomy.module	2012-03-18 19:24:09.000000000 +0100
-@@ -925,6 +925,9 @@
+@@ -948,6 +948,9 @@
   *   depending on the $load_entities parameter.
   */
  function taxonomy_get_tree($vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE) {

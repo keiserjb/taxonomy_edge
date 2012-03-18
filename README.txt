@@ -20,6 +20,11 @@ Installation
 ------------
 Place in modules folder and enable it from /admin/build/modules
 
+Apply the core patch if you like:
+%> cd /path/to/drupal
+%> patch -p1 < sites/all/modules/taxonomy_edge/taxonomy-<drupal-version>.patch
+
+
 
 Maintenance
 -----------
