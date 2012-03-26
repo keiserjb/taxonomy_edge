@@ -61,5 +61,5 @@ class views_handler_argument_term_edge_node_tid_depth extends views_handler_argu
 
     $this->query->add_where(0, "$this->table_alias.$this->real_field", $subquery, 'IN');
   }
-  
+
 }

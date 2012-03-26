@@ -43,7 +43,7 @@ function taxonomy_edge_help($section) {
 }
 
 /**
- * Implementation of hook_perm().
+ * Implements hook_perm().
  */
 function taxonomy_edge_permission() {
   return array(
@@ -55,7 +55,7 @@ function taxonomy_edge_permission() {
 }
 
 /**
- * Implementation of hook_menu().
+ * Implements hook_menu().
  */
 function taxonomy_edge_menu() {
   $items = array();
@@ -75,7 +75,7 @@ function taxonomy_edge_menu() {
 }
 
 /**
- * Implementation of hook_cronapi().
+ * Implements hook_cronapi().
  * Regularly rebuild the edge list
  */
 function taxonomy_edge_cronapi($op, $job = NULL) {
@@ -153,7 +153,7 @@ function taxonomy_edge_taxonomy_term_delete($term) {
  * terms are reordered.
  *
  * @param array $form
- * @param type $form_state 
+ * @param type $form_state
  */
 function taxonomy_edge_form_taxonomy_overview_terms_alter(&$form, &$form_state) {
   $form['#submit'][] = 'taxonomy_edge_reorder_submit';
@@ -166,7 +166,7 @@ function taxonomy_edge_form_taxonomy_overview_terms_alter(&$form, &$form_state) 
  *
  * @param type $form
  * @param type $form_state
- * @return type 
+ * @return type
  */
 function taxonomy_edge_reorder_submit($form, &$form_state) {
   $vocabulary = $form['#vocabulary'];
@@ -244,7 +244,7 @@ function taxonomy_edge_reorder_submit($form, &$form_state) {
 /**
  * Insert a term into the edge tree.
  *
- * @param type $term 
+ * @param type $term
  */
 function _taxonomy_edge_taxonomy_term_insert($term) {
   $tid = $term->tid;
@@ -264,7 +264,7 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
         'distance' => 0,
       ))
       ->execute();
-    
+
     foreach ($parents as $parent) {
       db_query("
         INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
@@ -284,7 +284,7 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
 /**
  * Update a term in the edge tree.
  *
- * @param type $term 
+ * @param type $term
  */
 function _taxonomy_edge_taxonomy_term_update($term) {
   $tid = $term->tid;
@@ -368,7 +368,7 @@ function _taxonomy_edge_taxonomy_term_queue($term, $op) {
  * Unify parents
  *
  * @param type $parents
- * @return type 
+ * @return type
  */
 function _taxonomy_edge_unify_parents($parents) {
   $parents = is_array($parents) ? $parents : array($parents);
@@ -390,7 +390,7 @@ function _taxonomy_edge_unify_parents($parents) {
 
 /**
  * Process edge for a queued term.
- * @param type $term 
+ * @param type $term
  */
 function taxonomy_edge_process_queue_item($term) {
   switch ($term->operation) {
@@ -437,11 +437,11 @@ function taxonomy_edge_rebuild_batch() {
  *
  * @param type $success
  * @param type $result
- * @param type $operations 
+ * @param type $operations
  */
 function taxonomy_edge_rebuild_finished($success, $result, $operations) {
   if ($success) {
-    drupal_set_message(t('Taxonomy edges rebuilt: %rows processed with depth %depth in %time seconds', 
+    drupal_set_message(t('Taxonomy edges rebuilt: %rows processed with depth %depth in %time seconds',
       array('%rows' => $result['rows'], '%depth' => $result['depth'], '%time' => sprintf("%.03f", $result['time'])))
     );
   }
@@ -478,7 +478,7 @@ function taxonomy_edge_rebuild(&$context) {
   // snapshot
   $tx = db_transaction();
   lock_release('taxonomy_edge_rebuild');
-  
+
   // Use delete, as truncate is not transaction safe on MySQL.
   // @todo Investigate if db_truncate() is transaction safe.
   db_delete('taxonomy_term_edge')->execute();
@@ -494,7 +494,7 @@ function taxonomy_edge_rebuild(&$context) {
   ")->rowCount();
   $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
   $context['finished'] = 0.5;
-  
+
   while ($max_depth-- > 0) {
     $result = db_query("
       INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
@@ -524,7 +524,7 @@ function taxonomy_edge_rebuild(&$context) {
   }
   $context['finished'] = 1;
   $context['results'] = array('rows' => $total_rows, 'depth' => $depth, 'time' => microtime(TRUE) - $time);
-  
+
   return $total_rows;
 }
 
@@ -594,9 +594,9 @@ function taxonomy_edge_build_realtime() {
  * @see taxonomy_get_tree()
  */
 function taxonomy_edge_get_tree($vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE) {
-  // @todo Use regular taxonomy_get_tree if realtime build is disabled, 
+  // @todo Use regular taxonomy_get_tree if realtime build is disabled,
   //       as this function might be unreliable.
-  
+
   $children = &drupal_static('taxonomy_get_tree', array());
   $parents = &drupal_static('taxonomy_get_tree' . ':parents', array());
   $terms = &drupal_static('taxonomy_get_tree' . ':terms', array());
