@@ -12,7 +12,7 @@ class views_handler_argument_term_edge_node_tid_depth_modifier extends views_han
   function pre_query() {
     // We don't know our argument yet, but it's based upon our position:
     $argument = isset($this->view->args[$this->position]) ? $this->view->args[$this->position] : NULL;
-    if (!is_numeric($argument) && $argument !== 'all') {
+    if (!is_numeric($argument) && $argument !== 'all' && $argument != 'root') {
       return;
     }
 

@@ -1,0 +1,197 @@
+<?php
+
+/**
+ * @file
+ *
+ * Tests for Ultimate Cron's cron parser
+ */
+class TaxonomyEdgeTreeTestCase extends DrupalWebTestCase {
+  function setUp() {
+    #parent::setUp(array('taxonomy_edge'));
+    $this->setup = TRUE;
+
+    $this->treeInit();
+    module_load_include('core.inc', 'taxonomy_edge');
+  }
+
+  function tearDown() {
+    $vocabulary = &drupal_static('vocabulary', new stdClass);
+    #taxonomy_vocabulary_delete($vocabulary->vid);
+    #parent::tearDown();
+  }
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Tree',
+      'description' => 'Test tree handling functions.',
+      'group' => 'Taxonomy Edge',
+    );
+  }
+
+  function testMoveSubtree() {
+    $terms = &drupal_static('terms', array());
+    $vocabulary = &drupal_static('vocabulary', new stdClass);
+    $vid = $vocabulary->vid;
+
+    $tree = $this->formatTree();
+    $expect = 
+"test1
+- test2
+-- test3
+- test4
+-- test5
+sub1
+sub2
+sub3
+";
+    $match = $tree == $expect;
+    $message = "Tree initialized" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
+    #$mylog = &drupal_static('mylog', array());
+    #file_put_contents('/tmp/mylog', $this->myLog($mylog), FILE_APPEND);
+    #die(print_r($mylog, TRUE));
+    $this->assertTRUE($match, $message);
+
+    // Move 'test1' to 'sub1'
+    $term = $terms['test1'];
+    $term->parent = $terms['sub1']->tid;
+    taxonomy_term_save($term);
+
+    $tree = $this->formatTree();
+    $expect = 
+"sub1
+- test1
+-- test2
+--- test3
+-- test4
+--- test5
+sub2
+sub3
+";
+    $match = $tree == $expect;
+    $message = "Move 'test1' to 'sub1'" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
+    $this->assertTRUE($match, $message);
+
+    // Move 'test1' back to root
+    $term = $terms['test1'];
+    $term->parent = 0;
+    taxonomy_term_save($term);
+
+    $tree = $this->formatTree();
+    $expect = 
+"test1
+- test2
+-- test3
+- test4
+-- test5
+sub1
+sub2
+sub3
+";
+    $match = $tree == $expect;
+    $message = "Move 'test1' back to root" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
+    $this->assertTRUE($match, $message);
+
+    // Move 'test1' to 'sub3'
+    $term = $terms['test1'];
+    $term->parent = $terms['sub3']->tid;
+    taxonomy_term_save($term);
+
+    $tree = $this->formatTree();
+    $expect =
+"sub1
+sub2
+sub3
+- test1
+-- test2
+--- test3
+-- test4
+--- test5
+";
+    $match = $tree == $expect;
+    $message = "Move 'test1' to 'sub3'" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
+    $this->assertTRUE($match, $message);
+
+    // Move 'test1' back to root
+    $term = $terms['test1'];
+    $term->parent = 0;
+    taxonomy_term_save($term);
+
+    $tree = $this->formatTree();
+    $expect = 
+"test1
+- test2
+-- test3
+- test4
+-- test5
+sub1
+sub2
+sub3
+";
+    $match = $tree == $expect;
+    $message = "Move 'test1' back to root" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
+    $this->assertTRUE($match, $message);
+
+  }
+
+  function formatTree() {
+    $vocabulary = &drupal_static('vocabulary', new stdClass());
+    $vid = $vocabulary->vid;
+
+    $tree = taxonomy_edge_get_tree_optimized($vid);
+    $output = '';
+    foreach ($tree as $term) {
+      $output .= str_repeat('-', $term->depth);
+      $output .= $term->depth ? ' ' : '';
+      $output .= $term->name . "\n";
+    }
+    return $output;
+  }
+
+  private function treeInit() {
+    // Create a vocabulary.
+    $vocabulary = &drupal_static('vocabulary', new stdClass());
+    $vocabulary->name = 'taxonomy_edge_test1';
+    $vocabulary->description = 'taxonomy_edge_test1';
+    $vocabulary->machine_name = 'taxonomy_edge_test1' . rand(0,10000);
+    $vocabulary->help = '';
+    taxonomy_vocabulary_save($vocabulary);
+
+    $tree = &drupal_static('tree', array());
+    $tree[] = "test1";
+    $tree[] = "test1/test2";
+    $tree[] = "test1/test2/test3";
+    $tree[] = "test1/test4";
+    $tree[] = "test1/test4/test5";
+    $tree[] = "sub1";
+    $tree[] = "sub2";
+    $tree[] = "sub3";
+
+    Database::startLog('mylog');
+    $terms = &drupal_static('terms', array());
+    $weight = 0;
+    foreach ($tree as $path) {
+      $parts = explode('/', $path);
+      $name = array_pop($parts);
+      $parent = array_pop($parts);
+      $term = new stdClass();
+      $term->name = $name;
+      $term->vid = $vocabulary->vid;
+      $term->parent = $parent ? $terms[$parent]->tid : 0;
+      $term->weight = $weight++;
+      taxonomy_term_save($term);
+      $terms[$name] = $term;
+    }
+    $mylog = &drupal_static('mylog', array());
+    $mylog = Database::getLog('mylog');
+  }
+
+
+  function myLog($queries) {
+    $o = '';
+    foreach ($queries as $query) {
+      $o .= sprintf("[%.08f] %s\n", $query['time'], strtr($query['query'], $query['args'])) . "\n";
+    }
+    return $o;
+  }
+}
+

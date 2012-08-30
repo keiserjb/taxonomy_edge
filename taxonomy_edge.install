@@ -14,6 +14,9 @@ function taxonomy_edge_install() {
   drupal_set_message(st('Taxonomy Edge settings are available under !link',
     array('!link' => l(st('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy/edge'))
   ));
+  drupal_set_message(st('Remember to build trees: !link',
+    array('!link' => l(st('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy'))
+  ));
 }
 
 /**
@@ -29,8 +32,8 @@ function taxonomy_edge_uninstall() {
  */
 function taxonomy_edge_enable() {
   // Rebuild the edge list when module is enabled
-  drupal_load('module', 'taxonomy_edge');
-  taxonomy_edge_rebuild_batch();
+  #drupal_load('module', 'taxonomy_edge');
+  #taxonomy_edge_rebuild_batch();
 }
 
 /**
@@ -40,6 +43,13 @@ function taxonomy_edge_schema() {
   $schema['taxonomy_term_edge'] = array(
     'description' => 'Stores edge list for taxonomies.',
     'fields' => array(
+      'vid' => array(
+        'description' => 'Vocabulary ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
       'tid' => array(
         'description' => 'Term ID',
         'type' => 'int',
@@ -62,22 +72,64 @@ function taxonomy_edge_schema() {
         'default' => 0
       ),
     ),
-    'primary key' => array('tid', 'parent'),
+    'primary key' => array('tid', 'parent', 'vid'),
     'indexes' => array(
+      'idx_depth' => array('vid', 'distance', 'parent'),
       'idx_term' => array('tid', 'distance'),
-      'idx_parent' => array('parent', 'distance'),
+    ),
+  );
+
+  $schema['taxonomy_term_edge_order'] = array(
+    'description' => 'Sequencing table for sorting taxonomies.',
+    'fields' => array(
+      'oid' => array(
+        'description' => 'Order ID',
+        'type' => 'serial',
+      ),
+      'vid' => array(
+        'description' => 'Vocabulary ID',
+        'type' => 'int',
+        'unsigned' => FALSE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'tid' => array(
+        'description' => 'Term ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'parent' => array(
+        'description' => 'Parent Term ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+    ),
+    'primary key' => array('oid'),
+    'indexes' => array(
+      'idx_order' => array('vid', 'parent', 'oid'),
     ),
   );
 
   return $schema;
 }
 
+function taxonomy_edge_update_6101() {
+  db_drop_table('taxonomy_term_edge');
+  db_create_table('taxonomy_term_edge', drupal_get_schema('taxonomy_term_edge', TRUE));
+  db_create_table('taxonomy_term_edge_order', drupal_get_schema('taxonomy_term_edge_order', TRUE));
+  drupal_set_message(st('Remember to rebuild trees: !link',
+    array('!link' => l(st('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy'))
+  ));
+}
+
 function _taxonomy_edge_install() {
   db_add_index('node', 'idx_taxonomy_edge', array('sticky', 'created', 'nid'));
-  // db_add_index('term_node', 'idx_taxonomy_edge', array('vid', 'tid'));
 }
 
 function _taxonomy_edge_uninstall() {
   db_drop_index('node', 'idx_taxonomy_edge');
-  // db_drop_index('term_node', 'idx_taxonomy_edge');
 }

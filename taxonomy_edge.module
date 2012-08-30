@@ -8,11 +8,13 @@
  *
  * Example of getting all children from tid:14
  *
- * SELECT tid FROM {taxonomy_term_edge} WHERE parent = 14
+ * SELECT e.tid
+ * FROM taxonomy_term_edge e
+ * WHERE e.parent = 14;
  *
- * NOTE: Multiple parents are somewhat supported.
- *
- * @todo Fix concurrency issue for queue rebuild and full tree rebuild
+ * @todo Fix concurrency issue for queue rebuild and full tree rebuild (lock_may_be_available() inside transaction)
+ * @todo Make static caching possible in the get_tree override functions (optimization)
+ * @todo Fix drag'n'drop on interface for multiple parents
  *
  * @see README.txt
  */
@@ -27,9 +29,28 @@ define('TAXONOMY_EDGE_MAX_DEPTH', 100);
  */
 define('TAXONOMY_EDGE_BUILD_REALTIME', TRUE);
 
+/**
+ * Default value for static caching.
+ */
+define('TAXONOMY_EDGE_STATIC_CACHING', TRUE);
 
+/**
+ * Default value for optimized tree.
+ */
+define('TAXONOMY_EDGE_OPTIMIZED_GET_TREE', TRUE);
 
 // ---------- HOOKS ----------
+
+/**
+ * Implements hook_core_override().
+ */
+function taxonomy_edge_core_override_info() {
+  return array(
+    'taxonomy_get_tree' => array(
+      'callback' => 'taxonomy_edge_get_tree'
+    ),
+  );
+}
 
 /**
  * Implements hook_help().
@@ -60,6 +81,26 @@ function taxonomy_edge_permission() {
 function taxonomy_edge_menu() {
   $items = array();
 
+  // Bring /level and /all back into taxonomy pages and feeds
+  $items['taxonomy/term/%taxonomy_term/%'] = array(
+    'title' => 'Taxonomy term',
+    'title callback' => 'taxonomy_term_title',
+    'title arguments' => array(2),
+    'page callback' => 'taxonomy_edge_term_page',
+    'page arguments' => array(2, 3),
+    'access arguments' => array('access content'),
+    'file' => 'taxonomy_edge.pages.inc',
+  );
+  $items['taxonomy/term/%taxonomy_term/%/feed'] = array(
+    'title' => 'Taxonomy term',
+    'title callback' => 'taxonomy_term_title',
+    'title arguments' => array(2),
+    'page callback' => 'taxonomy_edge_term_feed',
+    'page arguments' => array(2, 3),
+    'access arguments' => array('access content'),
+    'file' => 'taxonomy_edge.pages.inc',
+  );
+
   // settings page
   $items['admin/structure/taxonomy/edge'] = array(
     'title'            => 'Edge',
@@ -68,24 +109,35 @@ function taxonomy_edge_menu() {
     'page arguments'   => array('taxonomy_edge_settings_form'),
     'access arguments' => array('administer taxonomy edge'),
     'type'             => MENU_LOCAL_TASK,
-    'file'             => 'taxonomy_edge.pages.inc'
+    'file'             => 'taxonomy_edge.admin.inc'
+  );
+  $items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/rebuild/%'] = array(
+    'title'            => 'Rebuild edges',
+    'description'      => 'Rebuild taxonomy edges',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('taxonomy_edge_rebuild_page_confirm', 3, 5),
+    'access arguments' => array('administer taxonomy edge'),
+    'type'             => MENU_CALLBACK,
+    'file'             => 'taxonomy_edge.admin.inc'
   );
 
   return $items;
 }
 
 /**
- * Implements hook_cronapi().
- * Regularly rebuild the edge list
+ * Implements hook_cron().
+ *
+ * Rebuild sorted tree if invalid
  */
-function taxonomy_edge_cronapi($op, $job = NULL) {
-  switch ($op) {
-    case 'list':
-      return array('taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges');
-    case 'rule':
-      return '0 2 * * *';
-    case 'settings':
-      return array('enabled' => FALSE);
+function taxonomy_edge_cron() {
+  module_load_include('rebuild.inc', 'taxonomy_edge');
+  foreach (taxonomy_get_vocabularies() as $vocabulary) {
+    if (!taxonomy_edge_is_order_valid($vocabulary->vid)) {
+      taxonomy_edge_rebuild_order_batch($vocabulary->vid);
+      $batch = &batch_get();
+      $batch['progressive'] = FALSE;
+      batch_process('admin/content/taxonomy/edge');
+    }
   }
 }
 
@@ -101,22 +153,43 @@ function taxonomy_edge_cron_queue_info() {
 }
 
 /**
- * Implements hook_cron_queue_info_alter().
+ * Implements hook_taxonomy_term_presave().
  */
-function taxonomy_edge_cron_queue_info_alter(&$queues) {
-  // If a rebuild is in progress, don't process queue before it's finished.
-  // The only I've found to do this, is to remove the queue from cron, as
-  // items otherwise would be lost.
-  if (!lock_may_be_available('taxonomy_edge_rebuild')) {
-    unset($queues['taxonomy_edge']);
+function taxonomy_edge_taxonomy_term_presave($term) {
+  if (empty($term->tid)) {
+    return;
   }
+  $org = !empty($term->original) ? $term->original : taxonomy_term_load($term->tid);
+  $modified = &drupal_static('taxonomy_edge_save_check_modified', TRUE);
+  $modified = ($org->name != $term->name || $org->weight != $term->weight);
+}
+
+/**
+ * Implements hook_taxonomy_vocabulary_insert().
+ */
+function taxonomy_edge_taxonomy_vocabulary_insert($vocabulary) {
+  taxonomy_edge_taxonomy_vocabulary_delete($vocabulary);
+  db_insert('taxonomy_term_edge')
+    ->fields(array(
+      'vid' => $vocabulary->vid,
+    ))
+    ->execute();
+}
+
+/**
+ * Implements hook_taxonomy_vocabulary_delete().
+ */
+function taxonomy_edge_taxonomy_vocabulary_delete($vocabulary) {
+  db_delete('taxonomy_term_edge')
+    ->condition('vid', $vocabulary->vid)
+    ->execute();
 }
 
 /**
  * Implements hook_taxonomy_term_insert().
  */
 function taxonomy_edge_taxonomy_term_insert($term) {
-  if (taxonomy_edge_build_realtime()) {
+  if (taxonomy_edge_is_build_realtime($term->vid)) {
     return _taxonomy_edge_taxonomy_term_insert($term);
   }
   else {
@@ -128,7 +201,7 @@ function taxonomy_edge_taxonomy_term_insert($term) {
  * Implements hook_taxonomy_term_update().
  */
 function taxonomy_edge_taxonomy_term_update($term) {
-  if (taxonomy_edge_build_realtime()) {
+  if (taxonomy_edge_is_build_realtime($term->vid)) {
     return _taxonomy_edge_taxonomy_term_update($term);
   }
   else {
@@ -140,7 +213,7 @@ function taxonomy_edge_taxonomy_term_update($term) {
  * Implements hook_taxonomy_term_delete().
  */
 function taxonomy_edge_taxonomy_term_delete($term) {
-  if (taxonomy_edge_build_realtime()) {
+  if (taxonomy_edge_is_build_realtime($term->vid)) {
     return _taxonomy_edge_taxonomy_term_delete($term);
   }
   else {
@@ -158,6 +231,46 @@ function taxonomy_edge_taxonomy_term_delete($term) {
 function taxonomy_edge_form_taxonomy_overview_terms_alter(&$form, &$form_state) {
   $form['#submit'][] = 'taxonomy_edge_reorder_submit';
 }
+
+/**
+ * Hook into the overview of vocabularies to provide rebuild actions.
+ */
+function taxonomy_edge_form_taxonomy_overview_vocabularies_alter(&$form, &$form_state) {
+  if (user_access('administer taxonomy edge')) {
+    foreach(taxonomy_get_vocabularies() as $vocabulary){
+      $form[$vocabulary->vid]['rebuild_edges'] = array(
+        '#type' => 'link',
+        '#title' => t('rebuild edges'),
+        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/edges"
+      );
+      $form[$vocabulary->vid]['rebuild_order'] = array(
+        '#type' => 'link',
+        '#title' => t('rebuild order'),
+        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/order"
+      );
+      $form[$vocabulary->vid]['rebuild_all'] = array(
+        '#type' => 'link',
+        '#title' => t('rebuild everything'),
+        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/all"
+      );
+    }
+    $form['#theme'] = 'taxonomy_edge_overview_vocabularies';
+  }
+}
+
+/**
+ * Implementation of hook_theme().
+ */
+function taxonomy_edge_theme(){
+  return array(
+    'taxonomy_edge_overview_vocabularies' => array(
+      'render element' => 'form',
+      'file' => 'taxonomy_edge.theme.inc'
+    )
+  );
+}
+
+// ---------- HANDLERS ----------
 
 /**
  * Copy/paste from core taxonomy module.
@@ -239,7 +352,124 @@ function taxonomy_edge_reorder_submit($form, &$form_state) {
   }
 }
 
+/**
+ * Cron queue worker
+ * Process edge for a queued term.
+ * @param integer $vid
+ *   Vocabulary ID
+ */
+function taxonomy_edge_process_queue_item($vid) {
+  if (lock_acquire('taxonomy_edge_rebuild_edges_' . $vid)) {
+    $queue = DrupalQueue::get('taxonomy_edge_items_' . $vid, TRUE);
+    $max = 1000;
+    while ($max-- > 0 && ($item = $queue->claimItem())) {
+      $term = $item->data;
+      switch ($term->operation) {
+        case 'insert':
+          _taxonomy_edge_taxonomy_term_insert($term);
+          break;
+        case 'update':
+          _taxonomy_edge_taxonomy_term_update($term);
+          break;
+        case 'delete':
+          _taxonomy_edge_taxonomy_term_delete($term);
+          break;
+      }
+      $queue->deleteItem($item);
+    }
+    lock_release('taxonomy_edge_rebuild_edges_' . $vid);
+  }
+}
+
 // ---------- PRIVATE HELPER FUNCTIONS ----------
+
+/**
+ * Delete subtree
+ *
+ * @param $vid
+ *   Vocabulary ID
+ * @param $tids
+ *   Array of term ids to delete subtree from
+ * @param $type
+ *   Type of delete
+ *     0: Delete entire subtree
+ *     1: Delete ancestors (detach children from parents in $tids)
+ */
+function _taxonomy_edge_delete_subtree($vid, $tid, $type = 0) {
+  // @fixme MySQL can not use EXISTS or IN without temp tables when deleting.
+  //        SQLite cannot perform join delete.
+  //        MySQL and Postgres differ in joined delete syntax.
+  //        Use optimized joined delete for MySQL and subquery for others.
+  //        With MySQL 5.6 we might be able to switch to a subquery method only.
+  $db_type = Database::getConnection()->databaseType();
+  $type = $type == 0 ? '' : 'AND e2.distance > e.distance';
+  switch ($db_type) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("DELETE e2.*
+        FROM {taxonomy_term_edge} e
+        INNER JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid
+        WHERE e.parent = :tid
+        $type
+        AND e.vid = :vid AND e2.vid = :vid
+      ", array(':tid' => $tid, ':vid' => $vid));
+      break;
+
+    default:
+      db_query("DELETE FROM 
+      {taxonomy_term_edge} WHERE eid IN (
+        SELECT e2.eid
+        FROM {taxonomy_term_edge} e
+        INNER JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid
+        WHERE e.parent = :tid
+        $type
+        AND e.vid = :vid AND e2.vid = :vid
+      )",  array(':tid' => $tid, ':vid' => $vid));
+      break;
+  }
+}
+
+/**
+ * Detach children from parents in $tids (delete ancestors)
+ */
+function _taxonomy_edge_detach_subtree($vid, $tid) {
+  return _taxonomy_edge_delete_subtree($vid, $tid, 1);
+}
+
+/**
+ * Attach path and children to new parents
+ *
+ * @param $vid
+ *   Vocabulary ID
+ * @param $tid
+ *   Term ID
+ * @param $parents
+ *   Term ID of new parents
+ */
+function _taxonomy_edge_attach_subtree($vid, $tid, $parent) {
+  // Build new parents
+  db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
+  SELECT :vid, e2.tid, e.parent, e.distance + e2.distance + 1 AS distance
+  FROM {taxonomy_term_edge} e
+  INNER JOIN {taxonomy_term_edge} e2 ON e.tid = :parent AND e2.parent = :tid
+  WHERE e.vid = :vid AND e2.vid = :vid
+  ", array(':tid' => $tid, ':parent' => $parent, ':vid' => $vid));
+}
+
+/**
+ * Detach path and children from current parent and attach to new parent
+ *
+ * @param $vid
+ *   Vocabulary ID
+ * @param $tid
+ *   Term ID
+ * @param $parent
+ *   Term ID of new parent
+ */
+function _taxonomy_edge_move_subtree($vid, $tid, $parent) {
+  _taxonomy_edge_detach_subtree($vid, $tid);
+  _taxonomy_edge_attach_subtree($vid, $tid, $parent);
+}
 
 /**
  * Insert a term into the edge tree.
@@ -247,37 +477,33 @@ function taxonomy_edge_reorder_submit($form, &$form_state) {
  * @param type $term
  */
 function _taxonomy_edge_taxonomy_term_insert($term) {
-  $tid = $term->tid;
+  $vocabulary = taxonomy_vocabulary_load($term->vid);
+  if ($vocabulary->hierarchy == 2) {
+    return;
+  }
 
   // Derive proper parent.
   $parents = _taxonomy_edge_unify_parents($term->parent);
+  $parent = $parents ? reset($parents) : 0;
 
-  // watchdog('taxonomy_edge', 'Inserting taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
-
-  if ($tid > 0) {
+  if ($term->tid > 0) {
     $tx = db_transaction();
 
-    db_insert('taxonomy_term_edge')
-      ->fields(array(
-        'tid' => $tid,
-        'parent' => $tid,
-        'distance' => 0,
-      ))
-      ->execute();
+    db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent) VALUES(:vid, :tid, :tid)", 
+      array(':vid' => $term->vid, ':tid' => $term->tid)
+    );
 
-    foreach ($parents as $parent) {
-      db_query("
-        INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-        SELECT DISTINCT :tid AS tid, e1.parent, e1.distance + 1 AS distance
-        FROM {taxonomy_term_edge} e1
-        LEFT JOIN {taxonomy_term_edge} e2 ON e2.tid = :tid AND e2.parent = e1.parent
-        WHERE e1.tid = :parent
-        AND e2.tid IS NULL
-      ", array(':tid' => $tid, ':parent' => $parent));
-    }
+    db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
+      SELECT :vid AS vid, :tid AS tid, e.parent, e.distance + 1 AS distance
+      FROM {taxonomy_term_edge} e
+      WHERE e.tid = :parent
+      AND e.vid = :vid
+    ", array(':vid' => $term->vid, ':tid' => $term->tid, ':parent' => $parent));
+
+    taxonomy_edge_invalidate_order($term->vid);
   }
   else {
-    watchdog('taxonomy_edge', 'Invalid term-id (%tid) received', array('%tid' => $tid), WATCHDOG_ERROR);
+    watchdog('taxonomy_edge', 'Invalid term-id (%tid) received', array('%tid' => $term->tid), WATCHDOG_ERROR);
   }
 }
 
@@ -287,54 +513,36 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
  * @param type $term
  */
 function _taxonomy_edge_taxonomy_term_update($term) {
-  $tid = $term->tid;
+  $tx = db_transaction();
+
+  // Invalidate sorted tree in case of name/weight change
+  $modified = &drupal_static('taxonomy_edge_save_check_modified', TRUE);
+  if ($modified) {
+    taxonomy_edge_invalidate_order($term->vid);
+  }
 
   if (!isset($term->parent)) {
     // Parent not set, no need to update hierarchy.
     return;
   }
 
-  // Derive proper parent.
+  // Derive proper parents.
+  // After this $new contains parents to be added
+  // and $del contains parents to removed.
   $parents = _taxonomy_edge_unify_parents($term->parent);
+  $parent = reset($parents);
 
-  // watchdog('taxonomy_edge', 'Updating taxonomy-edge for %tid [%parent]', array('%tid' => $tid, '%parent' => join(',', $parents)), WATCHDOG_DEBUG);
+  $old_parent = db_query("SELECT e.parent
+    FROM {taxonomy_term_edge} e
+    WHERE e.tid = :tid
+    AND e.distance = 1
+  ", array(':tid' => $term->tid))->fetchField();
 
-  $tx = db_transaction();
+  _taxonomy_edge_move_subtree($term->vid, $term->tid, $parent);
 
-  // Find invalid edges after move
-  $tablename = db_query_temporary("SELECT DISTINCT te2.tid, te2.parent
-    FROM {taxonomy_term_edge} te1
-    INNER JOIN {taxonomy_term_edge} te2 ON te1.tid = te2.tid
-    WHERE te1.parent = :tid AND te2.distance > te1.distance
-  ", array(':tid' => $tid));
-
-  // Delete those edges
-  // No way of doing a joined delete that works on both mysql and pgsql
-  // @todo Fix this by adding a unique id per row in term_edge, so a sub-select can be used?
-  $using = "{$tablename}";
-  $db_type = Database::getConnection('default')->databaseType();
-  if ($db_type == 'mysql' || $db_type == 'mysqli') {
-    $using .= ', {taxonomy_term_edge}';
-  }
-  db_query("
-    DELETE FROM {taxonomy_term_edge}
-    USING $using WHERE {taxonomy_term_edge}.tid = {$tablename}.tid AND {taxonomy_term_edge}.parent = {$tablename}.parent
-  ");
-
-  if ($parents) {
-    // Insert new and correct edges
-    $args = array(
-      ':parents' => array_values($parents),
-      ':tid' => $tid
-    );
-    db_query("
-      INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-      SELECT DISTINCT te2.tid, te1.parent, te1.distance + te2.distance + 1
-      FROM {taxonomy_term_edge} te1
-      INNER JOIN {taxonomy_term_edge} te2 ON te1.tid IN (:parents) AND te2.parent = :tid
-      LEFT JOIN {taxonomy_term_edge} te3 ON te2.tid = te3.tid AND te1.parent = te3.parent
-      WHERE te3.tid IS NULL
-    ", $args);
+  // Don't invalidate again if we have already done so.
+  if (!$modified) {
+    taxonomy_edge_invalidate_order($term->vid);
   }
 }
 
@@ -345,30 +553,34 @@ function _taxonomy_edge_taxonomy_term_update($term) {
  *   Term ID.
  */
 function _taxonomy_edge_taxonomy_term_delete($term) {
-  db_query("DELETE FROM {taxonomy_term_edge} WHERE tid = :tid OR parent = :tid", array('tid' => $term->tid));
+  db_query("DELETE FROM {taxonomy_term_edge} WHERE vid = :vid AND tid = :tid", array(':vid' => $term->vid, ':tid' => $term->tid));
 }
 
 /**
  * Queue an operation for the edge tree.
  *
- * @param type $term
- * @param type $op
+ * @param object $term
+ *   Term object
+ * @param string $op
  *   insert, update or delete
  */
 function _taxonomy_edge_taxonomy_term_queue($term, $op) {
   // Wait for rebuild to clear queue and initiate snapshot of term_hierarchy
-  if (lock_may_be_available('taxonomy_edge_rebuild') || lock_wait('taxonomy_edge_rebuild', 2)) {
-    $queue = DrupalQueue::get('taxonomy_edge', TRUE);
+  if (lock_may_be_available('taxonomy_edge_rebuild_edges_' . $term->vid)) {
+    $queue = DrupalQueue::get('taxonomy_edge_items_' . $term->vid, TRUE);
     $term->operation = $op;
     $queue->createItem($term);
+    $queue = DrupalQueue::get('taxonomy_edge', TRUE);
+    $queue->createItem($term->vid);
   }
 }
 
 /**
  * Unify parents
  *
- * @param type $parents
- * @return type
+ * @param mixed $parents
+ * @return array
+ *   Flattened array of parent term IDs
  */
 function _taxonomy_edge_unify_parents($parents) {
   $parents = is_array($parents) ? $parents : array($parents);
@@ -379,154 +591,123 @@ function _taxonomy_edge_unify_parents($parents) {
         $new_parents[] = $new;
       }
     }
-    elseif ($parent) {
+    else {
       $new_parents[] = $parent;
     }
   }
   return $new_parents;
 }
 
+/**
+ * Generate query for ordering by dynamically compiled path
+ *
+ * @param $tid
+ *   Term ID to generate dynamic path from.
+ * @return
+ *   String containing query.
+ */
+function _taxonomy_edge_generate_term_path_query($tid) {
+  $args = func_get_args();
+  $db_type = Database::getConnection()->databaseType();
+  switch ($db_type) {
+    case 'pgsql':
+      return "(SELECT array_to_string(array_agg(((tpx.weight + 1500) || tpx.name || '    ' || tpx.tid)), '    ') FROM (SELECT tpd.* FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.pid = $pid AND tpe.vid = $vid ORDER BY tpe.distance DESC) tpx)";
+    case 'mysql':
+    case 'mysqli':
+      return "(SELECT GROUP_CONCAT(tpd.weight + 1500, tpd.name, '    ', tpd.tid ORDER BY tpe.distance DESC SEPARATOR '    ') FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid)";
+    case 'sqlite':
+      return "(SELECT GROUP_CONCAT(val, '    ') FROM (SELECT (tpd.weight + 1500) || tpd.name || '    ' || tpd.tid AS val FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.pid = $pid AND tpe.vid = $vid ORDER BY tpe.distance DESC))";
+    default:
+  }
+}
+
+/**
+ * Generate a (hopefully) unique big integer for this request.
+ * Current time with ms + a random number.
+ */
+function _taxonomy_edge_get_key() {
+  static $key;
+  if (!isset($key)) {
+    $key = (int)(microtime(TRUE) * 1000);
+    $key = ($key % 3600000) * 1000 + rand(0, 999);
+  }
+  return $key;
+}
+
 // ---------- PUBLIC HELPER FUNCTIONS ----------
 
 /**
- * Process edge for a queued term.
- * @param type $term
- */
-function taxonomy_edge_process_queue_item($term) {
-  switch ($term->operation) {
-    case 'insert':
-      _taxonomy_edge_taxonomy_term_insert($term);
-      break;
-    case 'update':
-      _taxonomy_edge_taxonomy_term_update($term);
-      break;
-    case 'delete':
-      _taxonomy_edge_taxonomy_term_delete($term);
-      break;
-  }
-}
-
-/**
- * Rebuild edges
- */
-function taxonomy_edge_cron_rebuild() {
-  taxonomy_edge_rebuild_batch();
-  $batch = &batch_get();
-  $batch['progressive'] = FALSE;
-  batch_process('admin/content/taxonomy/edge');
-}
-
-/**
- * Start batch job for rebuild of edges
- */
-function taxonomy_edge_rebuild_batch() {
-  $batch = array(
-    'operations' => array(
-      array('taxonomy_edge_rebuild', array())
-    ),
-    'finished' => 'taxonomy_edge_rebuild_finished',
-    'file' => drupal_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.pages.inc',
-    'title' => t('Rebuilding taxonomy edges'),
-    'init_message' => t('Rebuilding taxonomy edges'),
-  );
-  batch_set($batch);
-}
-
-/**
- * Finished function for rebuild tree batch operation.
+ * Get max depth of a tree..
  *
- * @param type $success
- * @param type $result
- * @param type $operations
+ * @param $vid
+ *   Vocabulary ID
+ * @param $parent (optional)
+ *   Parent to max depth of
+ * @return
+ *   Max depth (distance)
  */
-function taxonomy_edge_rebuild_finished($success, $result, $operations) {
-  if ($success) {
-    drupal_set_message(t('Taxonomy edges rebuilt: %rows processed with depth %depth in %time seconds',
-      array('%rows' => $result['rows'], '%depth' => $result['depth'], '%time' => sprintf("%.03f", $result['time'])))
-    );
-  }
-  else {
-    drupal_set_message(t('Taxonomy edges rebuilt: FAILED'), 'error');
-  }
+function taxonomy_edge_get_max_depth($vid, $parent = 0) {
+  return db_query("SELECT MAX(distance) FROM {taxonomy_term_edge} WHERE vid = :vid AND parent = :parent", 
+    array(':vid' => $vid, ':parent' => $parent))->fetchField();
 }
 
 /**
- * Rebuild entire edge list.
+ * Checks if it's possible to build an edge realtime.
  *
- * @return integer
- *   Total number of rows inserted.
+ * @return boolean
+ *   TRUE if possible, FALSE if not.
  */
-function taxonomy_edge_rebuild(&$context) {
-  $depth = 0;
-  $max_depth = variable_get('taxonomy_edge_max_depth', TAXONOMY_EDGE_MAX_DEPTH);
-
-  // Acquire lock to avoid conflicts with queue
-  if (!lock_acquire('taxonomy_edge_rebuild')) {
-    $context['success'] = FALSE;
-    $context['message'] = t('Could not acquire lock!');
-    return;
-  }
-
-  $time = microtime(TRUE);
-  set_time_limit(86400);
-
-  // Clear the queue, we're rebulding anyways ...
-  $queue = DrupalQueue::get('taxonomy_edge', TRUE);
-  $queue->deleteQueue();
-
-  // Please use a proper isolation level, so that transaction provides us with a
-  // snapshot
-  $tx = db_transaction();
-  lock_release('taxonomy_edge_rebuild');
-
-  // Use delete, as truncate is not transaction safe on MySQL.
-  // @todo Investigate if db_truncate() is transaction safe.
-  db_delete('taxonomy_term_edge')->execute();
-
-  $total_rows = db_query("
-    INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-    SELECT DISTINCT h.tid, h.tid, 0
-    FROM {taxonomy_term_hierarchy} h
-    LEFT JOIN {taxonomy_term_edge} e ON e.tid = h.tid AND e.parent = h.tid
-    WHERE h.tid <> 0
-    AND h.tid <> h.parent
-    AND e.tid IS NULL
-  ")->rowCount();
-  $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
-  $context['finished'] = 0.5;
-
-  while ($max_depth-- > 0) {
-    $result = db_query("
-      INSERT INTO {taxonomy_term_edge} (tid, parent, distance)
-      SELECT DISTINCT h.tid, e.parent, :depth + 1
-      FROM {taxonomy_term_hierarchy} h
-      INNER JOIN {taxonomy_term_edge} e ON e.tid = h.parent
-      LEFT JOIN {taxonomy_term_edge} e2 ON e2.tid = h.tid AND e2.parent = e.parent
-      WHERE e.distance = :depth
-      AND h.tid <> 0
-      AND h.tid <> h.parent
-      AND e2.tid IS NULL
-    ", array('depth' => $depth));
-
-    if (!$result) {
-      break;
+function taxonomy_edge_is_build_realtime($vid) {
+  if (variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME)) {
+    $queue = DrupalQueue::get('taxonomy_edge_items_' . $vid, TRUE);
+    if ($queue->numberOfItems()) {
+      // Don't build realtime, if there are still items left in the queue.
+      return FALSE;
     }
-
-    $rows = $result->rowCount();
-    if ($rows <= 0) {
-      break;
+    if (!lock_may_be_available('taxonomy_edge_rebuild_edges_' . $vid)) {
+      // Don't build realtime, if entire tree rebuild is in progress.
+      return FALSE;
     }
-    $depth++;
-
-    $total_rows += $rows;
-    $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
-    $context['finished'] += (1 - $context['finished']) / 2;
+    return TRUE;
   }
-  $context['finished'] = 1;
-  $context['results'] = array('rows' => $total_rows, 'depth' => $depth, 'time' => microtime(TRUE) - $time);
-
-  return $total_rows;
+  return FALSE;
 }
+
+/**
+ * Check if our sorted tree is still valid
+ */
+function taxonomy_edge_is_order_valid($vid, $reset = FALSE) {
+  static $valid_orders = array();
+  if ($reset || !isset($valid_orders[$vid])) {
+    $valid_orders[$vid] = db_query_range("SELECT 1 FROM {taxonomy_term_edge_order} WHERE vid = :vid", 0, 1, array(':vid' => -$vid))->fetchField();
+  }
+  return $valid_orders[$vid];
+}
+
+/**
+ * Check if our sorted tree is still valid
+ */
+function taxonomy_edge_is_order_invalid($reset = FALSE) {
+  static $invalid;
+  if ($reset || !isset($valid)) {
+    $invalid = db_query_range("SELECT 1
+      FROM {taxonomy_vocabulary} v
+      LEFT JOIN {taxonomy_term_edge_order} o ON -o.vid = v.vid AND o.vid < 0
+      WHERE o.oid IS NULL
+    ;", 0, 1)->fetchField();
+  }
+  return $invalid;
+}
+
+/**
+ * Invalidate order for a vocabulary
+ */
+function taxonomy_edge_invalidate_order($vid) {
+  db_delete('taxonomy_term_edge_order')
+    ->condition('vid', -$vid)
+    ->execute();
+}
+
 
 /**
  * Get parent from edge list.
@@ -537,18 +718,15 @@ function taxonomy_edge_rebuild(&$context) {
  *   array of term ids.
  */
 function taxonomy_edge_get_parents($tid) {
-  $parents = array();
-  $result = db_query("
-    SELECT e.parent AS tid, d.name
-    FROM {taxonomy_term_edge} e JOIN {taxonomy_term_data} d ON e.parent = d.tid
+  return db_query("
+    SELECT e.distance, e.parent
+    FROM {taxonomy_term_data} d
+    INNER JOIN {taxonomy_term_edge} e ON e.parent = d.tid
     WHERE e.tid = :tid
+    AND e.tid > 0
     AND e.distance > 0
     ORDER BY e.distance
-  ", array($tid));
-  while ($parent = $result->fetchObject()) {
-    $parents[] = $parent;
-  }
-  return $parents;
+  ", array(':tid' => $tid))->fetchAllKeyed();
 }
 
 /**
@@ -556,37 +734,21 @@ function taxonomy_edge_get_parents($tid) {
  *
  * @param $tid
  *   Term ID to get top term ID from.
- * @return integer
+ * @return int
  *   Top term ID.
  */
 function taxonomy_edge_get_top_tid($tid) {
-  return db_result(db_query("
-    SELECT h.tid
-    FROM {taxonomy_term_edge} te
-    INNER JOIN {taxonomy_term_hierarchy} h ON te.parent = h.tid
-    WHERE h.parent = 0
-    AND te.tid = :tid
-  ", array(':tid' => $tid)));
+  return db_query("SELECT e2.parent
+    FROM {taxonomy_term_edge} e
+    JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid AND e2.distance = e.distance - 1
+    WHERE e.tid = :tid 
+    AND e.parent = 0
+    AND e.vid = e2.vid
+  ", array(':tid' => $tid))->fetchField();
 }
 
-/**
- * Checks if it's possible to build an edge realtime.
- *
- * @return boolean
- *   TRUE if possible, FALSE if not.
- */
-function taxonomy_edge_build_realtime() {
-  $queue = DrupalQueue::get('taxonomy_edge', TRUE);
-  if ($queue->numberOfItems()) {
-    // Don't build realtime, if there are still items left in the queue.
-    return FALSE;
-  }
-  if (!lock_may_be_available('taxonomy_edge_rebuild')) {
-    // Don't build realtime, if entire tree rebuild is in progress.
-    return FALSE;
-  }
-  return variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME);
-}
+
+// ---------- CORE OVERRIDES ----------
 
 /**
  * Reimplementation of taxonomy_get_tree().
@@ -597,103 +759,79 @@ function taxonomy_edge_get_tree($vid, $parent = 0, $max_depth = NULL, $load_enti
   // @todo Use regular taxonomy_get_tree if realtime build is disabled,
   //       as this function might be unreliable.
 
-  $children = &drupal_static('taxonomy_get_tree', array());
-  $parents = &drupal_static('taxonomy_get_tree' . ':parents', array());
-  $terms = &drupal_static('taxonomy_get_tree' . ':terms', array());
+  module_load_include('core.inc', 'taxonomy_edge');
 
-  // We cache trees, so it's not CPU-intensive to call get_tree() on a term
-  // and its children, too.
-  if (!isset($children[$vid][$parent])) {
-    $children[$vid][$parent] = array();
-
-    $query = db_select('taxonomy_term_data', 't');
-    $query->join('taxonomy_term_hierarchy', 'h', 'h.tid = t.tid');
-    $query
-      ->addTag('translatable')
-      ->addTag('term_access')
-      ->fields('t')
-      ->fields('h', array('parent'))
-      ->condition('t.vid', $vid)
-      ->orderBy('t.weight')
-      ->orderBy('t.name');
-
-    if ($parent) {
-      $query->join('taxonomy_term_edge', 'e', 'e.tid = t.tid');
-      $query->condition('e.parent', $parent);
-    }
-
-    $result = $query->execute();
-
-    foreach ($result as $term) {
-      // @todo Optimize this. Using tids as index protects us from multiple
-      //       calls at the expense of performance on large trees.
-      $children[$vid][$term->parent][$term->tid] = $term->tid;
-      $parents[$vid][$term->tid][$term->parent] = $term->parent;
-      $terms[$vid][$term->tid] = $term;
-    }
+  // Use optimized version if possible
+  if (variable_get('taxonomy_edge_optimized_get_tree', TAXONOMY_EDGE_OPTIMIZED_GET_TREE)) {
+    return taxonomy_edge_get_tree_optimized($vid, $parent, $max_depth, $load_entities);
   }
-
-  // Load full entities, if necessary. The entity controller statically
-  // caches the results.
-  if ($load_entities) {
-    $term_entities = taxonomy_term_load_multiple(array_keys($terms[$vid]));
+  else {
+    return taxonomy_edge_get_tree_generic($vid, $parent, $max_depth, $load_entities);
   }
-
-  $max_depth = (!isset($max_depth)) ? count($children[$vid]) : $max_depth;
-  $tree = array();
-
-  // Keeps track of the parents we have to process, the last entry is used
-  // for the next processing step.
-  $process_parents = array();
-  $process_parents[] = $parent;
-
-  // Loops over the parent terms and adds its children to the tree array.
-  // Uses a loop instead of a recursion, because it's more efficient.
-  while (count($process_parents)) {
-    $parent = array_pop($process_parents);
-    // The number of parents determines the current depth.
-    $depth = count($process_parents);
-    if ($max_depth > $depth && !empty($children[$vid][$parent])) {
-      $has_children = FALSE;
-      $child = current($children[$vid][$parent]);
-      do {
-        if (empty($child)) {
-          break;
-        }
-        $term = $load_entities ? $term_entities[$child] : $terms[$vid][$child];
-        if (count($parents[$vid][$term->tid]) > 1) {
-          // We have a term with multi parents here. Clone the term,
-          // so that the depth attribute remains correct.
-          $term = clone $term;
-        }
-        $term->depth = $depth;
-        unset($term->parent);
-        $term->parents = array_values($parents[$vid][$term->tid]);
-        $tree[] = $term;
-        if (!empty($children[$vid][$term->tid])) {
-          $has_children = TRUE;
-
-          // We have to continue with this parent later.
-          $process_parents[] = $parent;
-          // Use the current term as parent for the next iteration.
-          $process_parents[] = $term->tid;
-
-          // Reset pointers for child lists because we step in there more often
-          // with multi parents.
-          reset($children[$vid][$term->tid]);
-          // Move pointer so that we get the correct term the next time.
-          next($children[$vid][$parent]);
-          break;
-        }
-      } while ($child = next($children[$vid][$parent]));
-
-      if (!$has_children) {
-        // We processed all terms in this hierarchy-level, reset pointer
-        // so that this function works the next time it gets called.
-        reset($children[$vid][$parent]);
-      }
-    }
-  }
-
-  return $tree;
 }
+
+/**
+ * Reimplementation of taxonomy_select_nodes() re-allowing depth modifier.
+ */
+function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth = 0, $order = NULL) {
+  if (!variable_get('taxonomy_maintain_index_table', TRUE)) {
+    return array();
+  }
+
+  // If no depth, just use core (faster query due to no joins)
+  if ($depth == 0) {
+    $args = $order ? array($tid, $pager, $limit, $order) : array($tid, $pager, $limit);
+    return call_user_func_array('taxonomy_select_nodes', $args);
+  } 
+
+  // Set default order if not specified
+  if (!isset($order)) {
+    $order = array('n.sticky' => 'DESC', 'n.created' => 'DESC', 'n.nid' => 'DESC');
+  }
+
+  // Lookup vid for better query on edge table
+  $vid = db_query("SELECT vid FROM {taxonomy_term_data} WHERE tid = :tid", array(':tid' => $tid))->fetchField();
+
+  // Locate tids to search in
+  $subquery = db_select('taxonomy_term_edge', 'e');
+  $subquery->condition('e.parent', $tid);
+  $subquery->condition('e.vid', $vid);
+  $subquery->condition('e.distance', $depth, '<=');
+  $subquery->fields('e', array('tid'));
+
+  // Find nodes
+  $query = db_select('taxonomy_index', 't');
+  $query->join('node', 'n', 'n.nid = t.nid');
+  $query->addTag('node_access');
+  $query->condition('t.tid', $subquery, 'IN');
+  if ($pager) {
+    $count_query = db_select('taxonomy_index', 't');
+    $count_query->join('taxonomy_term_edge', 'e', 'e.tid = t.tid'); 
+    $count_query->condition('e.parent', $tid);
+    $count_query->condition('e.vid', $vid);
+    $count_query->condition('e.distance', $depth, '<=');
+    $count_query->addExpression('COUNT(1)');
+
+    $query = $query->extend('PagerDefault');
+    if ($limit !== FALSE) {
+      $query = $query->limit($limit);
+    }
+    $query->setCountQuery($count_query);
+  }
+  else {
+    if ($limit !== FALSE) {
+      $query->range(0, $limit);
+    }
+  }
+  $query->addField('n', 'nid');
+  $query->addField('t', 'tid');
+  foreach ($order as $field => $direction) {
+    $query->orderBy($field, $direction);
+    // ORDER BY fields need to be loaded too, assume they are in the form
+    // table_alias.name
+    list($table_alias, $name) = explode('.', $field);
+    $query->addField($table_alias, $name);
+  }
+  return $query->execute()->fetchCol();
+}
+
