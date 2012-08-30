@@ -15,7 +15,7 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
 
   // @todo Optimize this. Currently we cannot use the static cache when using parent,
   //       because it's expected that the entire vocabulary is present in the static cache.
-  $static_cache = !$parent;
+  $static_cache = $static_cache && !$parent;
 
   if ($static_cache) {
     $children = &drupal_static('taxonomy_get_tree', array());
