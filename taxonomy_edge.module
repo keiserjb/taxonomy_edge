@@ -694,6 +694,7 @@ function taxonomy_edge_is_order_invalid($reset = FALSE) {
       FROM {taxonomy_vocabulary} v
       LEFT JOIN {taxonomy_term_edge_order} o ON -o.vid = v.vid AND o.vid < 0
       WHERE o.oid IS NULL
+      AND v.hierarchy = 1
     ;", 0, 1)->fetchField();
   }
   return $invalid;
