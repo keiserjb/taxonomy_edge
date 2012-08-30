@@ -703,6 +703,11 @@ function taxonomy_edge_is_order_invalid($reset = FALSE) {
  * Invalidate order for a vocabulary
  */
 function taxonomy_edge_invalidate_order($vid) {
+  static $once = FALSE;
+  if ($once) {
+    return;
+  }
+  $once = TRUE;
   db_delete('taxonomy_term_edge_order')
     ->condition('vid', -$vid)
     ->execute();

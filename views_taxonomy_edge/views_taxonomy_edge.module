@@ -55,7 +55,7 @@ function views_taxonomy_edge_views_data_alter(&$data) {
 
   // Hierarchy sort handler.
   $data['taxonomy_term_data']['term_sort_hierarchy'] = array(
-    'group' => t('Taxonomy term'),
+    'group' => t('Taxonomy edge'),
     'title' => t('taxonomy hierarchy order'),
     'help' => t('Sort by hierarchy order'),
     'sort' => array(
