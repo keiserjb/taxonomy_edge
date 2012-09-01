@@ -18,12 +18,6 @@ function views_taxonomy_edge_views_data() {
 
   // Joins for this table
   $data['taxonomy_term_edge']['table']['join'] = array(
-    'taxonomy_term_edge_order' => array(
-      'left_field' => 'tid',
-      'field' => 'tid',
-      'type' => 'INNER',
-      'extra' => '{taxonomy_term_edge}.parent = {taxonomy_term_edge_order}.parent AND {taxonomy_term_edge}.vid = {taxonomy_term_edge_order}.vid',
-    ),
     'taxonomy_term_data' => array(
       'left_field' => 'tid',
       'field' => 'tid',
@@ -89,56 +83,6 @@ function views_taxonomy_edge_views_data() {
     'sort' => array(
       'handler' => 'views_handler_sort',
     ),
-  );
-
-  // Taxonomy Ordering
-  $data['taxonomy_term_edge_order']['table']['group']  = t('Taxonomy edge');
-  // Advertise this table as a possible base table
-  $data['taxonomy_term_edge_order']['table']['base'] = array(
-    'field' => 'oid',
-    'title' => t('Term order'),
-  );
-  // Joins for this table
-  $data['taxonomy_term_edge_order']['table']['join'] = array(
-    'taxonomy_term_edge' => array(
-      'left_field' => 'tid',
-      'field' => 'tid',
-      'type' => 'INNER',
-      'extra' => '{taxonomy_term_edge}.parent = {taxonomy_term_edge_order}.parent AND {taxonomy_term_edge}.vid = {taxonomy_term_edge_order}.vid',
-    ),
-    'taxonomy_vocabulary' => array(
-      'left_field' => 'vid',
-      'field' => 'vid',
-      'type' => 'INNER',
-    ),
-    'taxonomy_term_data' => array(
-      'left_table' => 'taxonomy_term_edge',
-      'left_field' => 'tid',
-      'field' => 'tid',
-      'type' => 'INNER',
-      'extra' => '{taxonomy_term_edge}.parent = {taxonomy_term_edge_order}.parent AND {taxonomy_term_edge}.vid = {taxonomy_term_edge_order}.vid',
-    ),
-  );
-
-  // Columns
-  $data['taxonomy_term_edge_order']['oid'] = array(
-    'title' => t('Order ID'), // The item it appears as on the UI,
-    'help' => t('The taxonomy term order ID'),
-  );
-
-  $data['taxonomy_term_edge_order']['vid'] = array(
-    'title' => t('Vocabulary ID'), // The item it appears as on the UI,
-    'help' => t('The vocabulary ID'),
-  );
-
-  $data['taxonomy_term_edge_order']['tid'] = array(
-    'title' => t('Term ID'), // The item it appears as on the UI,
-    'help' => t('The taxonomy term ID'),
-  );
-
-  $data['taxonomy_term_edge_order']['parent'] = array(
-    'title' => t('Parent term ID'), // The item it appears as on the UI,
-    'help' => t('The taxonomy term ID'),
   );
 
   return $data;

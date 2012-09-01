@@ -132,12 +132,6 @@ function taxonomy_edge_menu() {
 function taxonomy_edge_cron() {
   module_load_include('rebuild.inc', 'taxonomy_edge');
   foreach (taxonomy_get_vocabularies() as $vocabulary) {
-    if (!taxonomy_edge_is_order_valid($vocabulary->vid)) {
-      taxonomy_edge_rebuild_order_batch($vocabulary->vid);
-      $batch = &batch_get();
-      $batch['progressive'] = FALSE;
-      batch_process('admin/content/taxonomy/edge');
-    }
   }
 }
 
@@ -150,18 +144,6 @@ function taxonomy_edge_cron_queue_info() {
     'time' => 60,
   );
   return $queues;
-}
-
-/**
- * Implements hook_taxonomy_term_presave().
- */
-function taxonomy_edge_taxonomy_term_presave($term) {
-  if (empty($term->tid)) {
-    return;
-  }
-  $org = !empty($term->original) ? $term->original : taxonomy_term_load($term->tid);
-  $modified = &drupal_static('taxonomy_edge_save_check_modified', TRUE);
-  $modified = ($org->name != $term->name || $org->weight != $term->weight);
 }
 
 /**
@@ -242,16 +224,6 @@ function taxonomy_edge_form_taxonomy_overview_vocabularies_alter(&$form, &$form_
         '#type' => 'link',
         '#title' => t('rebuild edges'),
         '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/edges"
-      );
-      $form[$vocabulary->vid]['rebuild_order'] = array(
-        '#type' => 'link',
-        '#title' => t('rebuild order'),
-        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/order"
-      );
-      $form[$vocabulary->vid]['rebuild_all'] = array(
-        '#type' => 'link',
-        '#title' => t('rebuild everything'),
-        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/all"
       );
     }
     $form['#theme'] = 'taxonomy_edge_overview_vocabularies';
@@ -499,8 +471,6 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
       WHERE e.tid = :parent
       AND e.vid = :vid
     ", array(':vid' => $term->vid, ':tid' => $term->tid, ':parent' => $parent));
-
-    taxonomy_edge_invalidate_order($term->vid);
   }
   else {
     watchdog('taxonomy_edge', 'Invalid term-id (%tid) received', array('%tid' => $term->tid), WATCHDOG_ERROR);
@@ -514,12 +484,6 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
  */
 function _taxonomy_edge_taxonomy_term_update($term) {
   $tx = db_transaction();
-
-  // Invalidate sorted tree in case of name/weight change
-  $modified = &drupal_static('taxonomy_edge_save_check_modified', TRUE);
-  if ($modified) {
-    taxonomy_edge_invalidate_order($term->vid);
-  }
 
   if (!isset($term->parent)) {
     // Parent not set, no need to update hierarchy.
@@ -539,11 +503,6 @@ function _taxonomy_edge_taxonomy_term_update($term) {
   ", array(':tid' => $term->tid))->fetchField();
 
   _taxonomy_edge_move_subtree($term->vid, $term->tid, $parent);
-
-  // Don't invalidate again if we have already done so.
-  if (!$modified) {
-    taxonomy_edge_invalidate_order($term->vid);
-  }
 }
 
 /**
@@ -672,48 +631,6 @@ function taxonomy_edge_is_build_realtime($vid) {
   }
   return FALSE;
 }
-
-/**
- * Check if our sorted tree is still valid
- */
-function taxonomy_edge_is_order_valid($vid, $reset = FALSE) {
-  static $valid_orders = array();
-  if ($reset || !isset($valid_orders[$vid])) {
-    $valid_orders[$vid] = db_query_range("SELECT 1 FROM {taxonomy_term_edge_order} WHERE vid = :vid", 0, 1, array(':vid' => -$vid))->fetchField();
-  }
-  return $valid_orders[$vid];
-}
-
-/**
- * Check if our sorted tree is still valid
- */
-function taxonomy_edge_is_order_invalid($reset = FALSE) {
-  static $invalid;
-  if ($reset || !isset($valid)) {
-    $invalid = db_query_range("SELECT 1
-      FROM {taxonomy_vocabulary} v
-      LEFT JOIN {taxonomy_term_edge_order} o ON -o.vid = v.vid AND o.vid < 0
-      WHERE o.oid IS NULL
-      AND v.hierarchy = 1
-    ;", 0, 1)->fetchField();
-  }
-  return $invalid;
-}
-
-/**
- * Invalidate order for a vocabulary
- */
-function taxonomy_edge_invalidate_order($vid) {
-  static $once = FALSE;
-  if ($once) {
-    return;
-  }
-  $once = TRUE;
-  db_delete('taxonomy_term_edge_order')
-    ->condition('vid', -$vid)
-    ->execute();
-}
-
 
 /**
  * Get parent from edge list.

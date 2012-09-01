@@ -76,41 +76,7 @@ function taxonomy_edge_schema() {
     'indexes' => array(
       'idx_depth' => array('vid', 'distance', 'parent'),
       'idx_term' => array('tid', 'distance'),
-    ),
-  );
-
-  $schema['taxonomy_term_edge_order'] = array(
-    'description' => 'Sequencing table for sorting taxonomies.',
-    'fields' => array(
-      'oid' => array(
-        'description' => 'Order ID',
-        'type' => 'serial',
-      ),
-      'vid' => array(
-        'description' => 'Vocabulary ID',
-        'type' => 'int',
-        'unsigned' => FALSE,
-        'not null' => TRUE,
-        'default' => 0
-      ),
-      'tid' => array(
-        'description' => 'Term ID',
-        'type' => 'int',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-        'default' => 0
-      ),
-      'parent' => array(
-        'description' => 'Parent Term ID',
-        'type' => 'int',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-        'default' => 0
-      ),
-    ),
-    'primary key' => array('oid'),
-    'indexes' => array(
-      'idx_order' => array('vid', 'parent', 'oid'),
+      'idx_tree' => array('parent', 'vid', 'distance'),
     ),
   );
 
@@ -120,7 +86,6 @@ function taxonomy_edge_schema() {
 function taxonomy_edge_update_6101() {
   db_drop_table('taxonomy_term_edge');
   db_create_table('taxonomy_term_edge', drupal_get_schema('taxonomy_term_edge', TRUE));
-  db_create_table('taxonomy_term_edge_order', drupal_get_schema('taxonomy_term_edge_order', TRUE));
   drupal_set_message(st('Remember to rebuild trees: !link',
     array('!link' => l(st('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy'))
   ));

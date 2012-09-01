@@ -151,8 +151,6 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
     return $tree;
   }
 
-  $valid_order = taxonomy_edge_is_order_valid($vid);
-
   // No cache, let's fetch from db
   $query = db_select('taxonomy_term_edge', 'e');
   $query->join('taxonomy_term_data', 'd', 'd.tid = e.tid');
@@ -164,20 +162,14 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
     ->fields('d')
     ->condition('e.parent', $parent)
     ->condition('e.distance', 0, '>')
-    ->condition('e.vid', (int)$vid);
+    ->condition('e.vid', $vid);
 
   if ($max_depth) {
     $query->condition('e.distance', $max_depth, '<=');
   }
   
-  if ($valid_order) {
-    $query->join('taxonomy_term_edge_order', 'o', 'o.tid = e.tid AND o.parent = e.parent AND o.vid = e.vid');
-    $query->orderBy('o.oid');
-  }
-  else {
-    $query->addExpression(_taxonomy_edge_generate_term_path_query('e.tid'), 'sort_path');
-    $query->orderBy('sort_path');
-  }
+  $query->addExpression(_taxonomy_edge_generate_term_path_query('e.tid'), 'sort_path');
+  $query->orderBy('sort_path');
 
   $result = $query->execute();
 

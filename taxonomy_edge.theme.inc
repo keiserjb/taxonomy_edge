@@ -22,8 +22,6 @@ function theme_taxonomy_edge_overview_vocabularies($variables){
       $row[] = drupal_render($vocabulary['list']);
       $row[] = drupal_render($vocabulary['add']);
       $row[] = drupal_render($vocabulary['rebuild_edges']);
-      $row[] = drupal_render($vocabulary['rebuild_order']);
-      $row[] = drupal_render($vocabulary['rebuild_all']);
       $rows[] = array(
         'data' => $row,
         'class' => array(
@@ -41,11 +39,7 @@ function theme_taxonomy_edge_overview_vocabularies($variables){
   }
   $header[] = array(
     'data' => t('Operations'),
-    'colspan' => '3'
-  );
-  $header[] = array(
-    'data' => t('Taxonomy Edge'),
-    'colspan' => '3'
+    'colspan' => '4'
   );
   return theme('table', array(
     'header' => $header,
