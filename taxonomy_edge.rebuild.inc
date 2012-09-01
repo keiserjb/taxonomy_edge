@@ -58,13 +58,13 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
     $context['results'][] = t('Invalid vocabulary ID: %vid', array('%vid' => $vid));
     return;
   }
-
+/*
   if ($vocabulary->hierarchy == 2) {
     $context['success'] = FALSE;
     $context['results'][] = t('Multiple parents not supported: %name', array('%name' => $vocabulary->name));
     return;
   }
-
+*/
   // Acquire lock to avoid conflicts with queue
   if (!lock_acquire('taxonomy_edge_rebuild')) {
     $context['success'] = FALSE;
@@ -88,7 +88,7 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
   taxonomy_edge_taxonomy_vocabulary_insert($vocabulary);
 
   $result = db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
-    SELECT :vid, h.tid, h.tid, 0
+    SELECT DISTINCT :vid, h.tid, h.tid, 0
     FROM {taxonomy_term_hierarchy} h
     INNER JOIN {taxonomy_term_data} d ON d.tid = h.tid
     WHERE h.tid <> 0
@@ -106,10 +106,12 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
       FROM {taxonomy_term_edge} e 
       INNER JOIN {taxonomy_term_hierarchy} h ON h.tid = e.parent
       INNER JOIN {taxonomy_term_data} d ON d.tid = h.tid
+      -- LEFT JOIN {taxonomy_term_edge} e2 ON e2.vid = :vid AND e2.tid = e.tid AND e2.parent = h.parent
       WHERE e.distance = :depth 
       AND e.vid = :vid
       AND h.tid <> 0
       AND h.tid <> h.parent
+      -- AND e2.tid IS NULL
     ", array(':vid' => $vid, ':depth' => $depth));
 
     $rows = $result->rowCount();
