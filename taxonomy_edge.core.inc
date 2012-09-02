@@ -139,6 +139,10 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
     return taxonomy_edge_get_tree_generic($vid, $parent, $max_depth, $load_entities);
   }
 
+  // Use generic if entire tree is queried
+  if (!$parent) {
+    return taxonomy_edge_get_tree_generic($vid, $parent, $max_depth, $load_entities);
+  }
 
   // Setup static cache if applicable
   $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
