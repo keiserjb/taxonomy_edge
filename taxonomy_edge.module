@@ -124,6 +124,21 @@ function taxonomy_edge_menu() {
 }
 
 /**
+ * Implements hook_cronapi().
+ * Regularly rebuild the edge list
+ */
+function taxonomy_edge_cronapi($op, $job = NULL) {
+  switch ($op) {
+    case 'list':
+      return array('taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges');
+    case 'rule':
+      return '0 2 * * *';
+    case 'settings':
+      return array('enabled' => FALSE);
+  }
+}
+
+/**
  * Implements hook_cron_queue_info().
  */
 function taxonomy_edge_cron_queue_info() {
@@ -338,6 +353,19 @@ function taxonomy_edge_process_queue_item($vid) {
       $queue->deleteItem($item);
     }
     lock_release('taxonomy_edge_rebuild_edges_' . $vid);
+  }
+}
+
+/**
+ * Rebuild edges
+ */
+function taxonomy_edge_cron_rebuild() {
+  module_load_include('rebuild.inc', 'taxonomy_edge');
+  foreach (taxonomy_get_vocabularies() as $vocabulary) {
+    taxonomy_edge_rebuild_edges_batch($vocabulary->vid);
+    $batch = &batch_get();
+    $batch['progressive'] = FALSE;
+    batch_process('admin/content/taxonomy/edge');
   }
 }
 
