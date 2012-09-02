@@ -1,18 +1,21 @@
 <?php
+/**
+ * @file
+ */
 
 /**
  * Copy of theme_taxonomy_overview_vocabularies, but with the addition of a 
  * column, and an increase in colspan.
  */
-function theme_taxonomy_edge_overview_vocabularies($variables){
+function theme_taxonomy_edge_overview_vocabularies($variables) {
   $form = $variables['form'];
   $rows = array();
-  foreach(element_children($form) as $key){
-    if(isset($form[$key]['name'])){
+  foreach (element_children($form) as $key) {
+    if (isset($form[$key]['name'])) {
       $vocabulary = &$form[$key];
       $row = array();
       $row[] = drupal_render($vocabulary['name']);
-      if(isset($vocabulary['weight'])){
+      if (isset($vocabulary['weight'])) {
         $vocabulary['weight']['#attributes']['class'] = array(
           'vocabulary-weight'
         );
@@ -35,7 +38,7 @@ function theme_taxonomy_edge_overview_vocabularies($variables){
   $header = array(
     t('Vocabulary name')
   );
-  if(isset($form['actions'])){
+  if (isset($form['actions'])) {
     $header[] = t('Weight');
     drupal_add_tabledrag('taxonomy', 'order', 'sibling', 'vocabulary-weight');
   }
