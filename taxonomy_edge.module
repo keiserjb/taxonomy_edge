@@ -146,11 +146,24 @@ function taxonomy_edge_cron() {
 function taxonomy_edge_cronapi($op, $job = NULL) {
   switch ($op) {
     case 'list':
-      return array('taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges');
+      return array(
+        'taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges',
+        'taxonomy_edge_cron' => 'Resort invalid trees'
+      );
     case 'rule':
-      return '0 2 * * *';
+      switch ($job) {
+        case 'taxonomy_edge_cron_rebuild':
+          return '0 2 * * *';
+        case 'taxonomy_edge_cron':
+          return '* * * * *';
+      }
     case 'settings':
-      return array('enabled' => FALSE);
+      switch ($job) {
+        case 'taxonomy_edge_cron_rebuild':
+          return array('enabled' => FALSE);
+        case 'taxonomy_edge_cron':
+          return array('enabled' => TRUE);
+      }
   }
 }
 
