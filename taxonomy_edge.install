@@ -90,18 +90,45 @@ function taxonomy_edge_schema() {
   return $schema;
 }
 
+/**
+ * Update edge table with serial, vocabulary id and indexes
+ */
 function taxonomy_edge_update_6101() {
-  db_drop_table('taxonomy_term_edge');
-  db_create_table('taxonomy_term_edge', drupal_get_schema('taxonomy_term_edge', TRUE));
+  db_drop_index('taxonomy_term_edge', 'idx_parent');
+  db_drop_primary_key('taxonomy_term_edge');
+
+  db_add_field('taxonomy_term_edge', 'eid', array(
+    'description' => 'Edge ID',
+    'type' => 'serial',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+  ), array('primary key' => array('eid')));
+  db_add_field('taxonomy_term_edge', 'vid', array(
+    'description' => 'Vocabulary ID',
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+    'default' => 0
+  ));
+
+  db_add_index('taxonomy_term_edge', 'idx_depth', array('vid', 'distance', 'parent'));
+  db_add_index('taxonomy_term_edge', 'idx_tree', array('parent', 'vid', 'distance'));
+
   drupal_set_message(st('Remember to rebuild trees: !link',
     array('!link' => l(st('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy'))
   ));
 }
 
+/**
+ * Implements hook_install
+ */
 function _taxonomy_edge_install() {
   db_add_index('node', 'idx_taxonomy_edge', array('sticky', 'created', 'nid'));
 }
 
+/**
+ * Implements hook_uninstall
+ */
 function _taxonomy_edge_uninstall() {
   db_drop_index('node', 'idx_taxonomy_edge');
 }
