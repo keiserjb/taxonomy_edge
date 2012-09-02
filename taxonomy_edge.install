@@ -210,7 +210,8 @@ function taxonomy_edge_update_6102(&$sandbox) {
       ),
       'primary key' => array('oid'),
       'indexes' => array(
-        'idx_order' => array('vid', 'parent', 'oid'),
+        'idx_order' => array('vid', 'parent'),
+        'idx_edge' => array('eid'),
       ),
     );
 
