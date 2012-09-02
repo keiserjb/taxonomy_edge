@@ -58,13 +58,7 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
     $context['results'][] = t('Invalid vocabulary ID: %vid', array('%vid' => $vid));
     return;
   }
-/*
-  if ($vocabulary->hierarchy == 2) {
-    $context['success'] = FALSE;
-    $context['results'][] = t('Multiple parents not supported: %name', array('%name' => $vocabulary->name));
-    return;
-  }
-*/
+
   // Acquire lock to avoid conflicts with queue
   if (!lock_acquire('taxonomy_edge_rebuild')) {
     $context['success'] = FALSE;
@@ -123,9 +117,10 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
     $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
     $context['finished'] += (1 - $context['finished']) / 2;
   }
+  $context['success'] = TRUE;
   $context['finished'] = 1;
   $context['results'][] = t('Taxonomy edges rebuilt for %name: %rows processed with depth %depth in %time seconds',
-      array('%rows' => $total_rows, '%depth' => $depth, '%time' => microtime(TRUE) - $time, '%name' => $vocabulary->name)
+      array('%rows' => $total_rows, '%depth' => $depth, '%time' => sprintf("%.03f", microtime(TRUE) - $time), '%name' => $vocabulary->name)
   );
 
   return $total_rows;
