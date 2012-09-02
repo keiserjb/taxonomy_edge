@@ -34,7 +34,7 @@ function taxonomy_edge_settings_form() {
   );
   $form['taxonomy_edge_optimized_get_tree'] = array(
     '#title' => t('Use optimized version of taxonomy_get_tree'),
-    '#description' => t('Taxonomy Edge implements two versions of taxonomy_get_tree(). One slightly optimized and one a bit more optimized. The more optimized version can in some cases be slower in highly dynamic taxonomy environments.'),
+    '#description' => t('Taxonomy Edge implements two versions of taxonomy_get_tree(). One that acts just like the core version except it can select subtrees but still sorts the entire vocabulary on the DB, and one that can do select and sorting on subtrees only. Check this box to select the latter one. CPU wise, this method can sometimes be slower.'),
     '#type' => 'checkbox',
     '#default_value' => variable_get('taxonomy_edge_optimized_get_tree', TAXONOMY_EDGE_OPTIMIZED_GET_TREE),
   );
