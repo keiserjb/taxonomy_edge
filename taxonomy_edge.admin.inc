@@ -78,5 +78,9 @@ function taxonomy_edge_rebuild_page_confirm_submit($form, &$form_state) {
   switch ($form_state['values']['type']) {
     case 'edges':
       return taxonomy_edge_rebuild_edges_batch(array($form_state['values']['vocabulary']->vid));
+    case 'order':
+      return taxonomy_edge_rebuild_order_batch(array($form_state['values']['vocabulary']->vid));
+    case 'all':
+      return taxonomy_edge_rebuild_all_batch(array($form_state['values']['vocabulary']->vid));
   }
 }

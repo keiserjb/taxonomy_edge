@@ -140,8 +140,10 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
     return taxonomy_edge_get_tree_generic($vid, $parent, $max_depth, $load_entities);
   }
 
-  // Use generic if entire tree is queried
-  if (!$parent) {
+  $valid_order = taxonomy_edge_is_order_valid($vid);
+
+  // Use generic if entire tree is queried and we don't have a presorted tree.
+  if (!$parent && !$valid_order) {
     return taxonomy_edge_get_tree_generic($vid, $parent, $max_depth, $load_entities);
   }
 
@@ -182,8 +184,14 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
     $query->condition('e.distance', $max_depth, '<=');
   }
   
-  $query->addExpression(_taxonomy_edge_generate_term_path_query('e.tid'), 'sort_path');
-  $query->orderBy('sort_path');
+  if ($valid_order) {
+    $query->join('taxonomy_term_edge_order', 'o', 'o.eid = e.eid AND o.parent = e.parent AND o.vid = ' . intval($vid));
+    $query->orderBy('o.oid');
+  }
+  else {
+    $query->addExpression(_taxonomy_edge_generate_term_path_query('e.tid'), 'sort_path');
+    $query->orderBy('sort_path');
+  }
 
   $result = $query->execute();
 

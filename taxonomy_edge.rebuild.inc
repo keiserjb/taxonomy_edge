@@ -22,6 +22,39 @@ function taxonomy_edge_rebuild_edges_batch($vids) {
 }
 
 /**
+ * Start batch job for rebuild of order
+ */
+function taxonomy_edge_rebuild_order_batch($vids) {
+  $batch = array(
+    'finished' => 'taxonomy_edge_rebuild_finished',
+    'file' => drupal_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
+    'title' => t('Rebuilding taxonomy edge order'),
+    'init_message' => t('Rebuilding taxonomy edge order'),
+  );
+  foreach ($vids as $vid) {
+    $batch['operations'][] = array('taxonomy_edge_rebuild_order', array($vid));
+  }
+  batch_set($batch);
+}
+
+/**
+ * Start batch job for rebuild of edges and order
+ */
+function taxonomy_edge_rebuild_all_batch($vids) {
+  $batch = array(
+    'finished' => 'taxonomy_edge_rebuild_finished',
+    'file' => drupal_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
+    'title' => t('Rebuilding taxonomy edges and order'),
+    'init_message' => t('Rebuilding taxonomy edges and order'),
+  );
+  foreach ($vids as $vid) {
+    $batch['operations'][] = array('taxonomy_edge_rebuild_edges', array($vid));
+    $batch['operations'][] = array('taxonomy_edge_rebuild_order', array($vid));
+  }
+  batch_set($batch);
+}
+
+/**
  * Finished function for rebuild tree batch operation.
  *
  * @param type $success
@@ -126,3 +159,46 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
   return $total_rows;
 }
 
+/**
+ * Rebuild the sorted tree.
+ */
+function taxonomy_edge_rebuild_order($vid, &$context) {
+  $vocabulary = taxonomy_vocabulary_load($vid);
+  if (!$vocabulary) {
+    $context['success'] = FALSE;
+    $context['message'] = t('Invalid vocabulary ID: %vid', array('%vid' => $vid));
+    return;
+  }
+
+  // Acquire lock
+  if (!lock_acquire('taxonomy_edge_rebuild_edges_' . $vid)) {
+    $context['success'] = FALSE;
+    $context['message'] = t('Could not acquire lock!');
+    return;
+  }
+
+  $tx = db_transaction();
+
+  $time = microtime(TRUE);
+  taxonomy_edge_invalidate_order($vid);
+  db_query("DELETE FROM {taxonomy_term_edge_order} WHERE vid = :vid", array(':vid' => $vid));
+
+  $total_rows = db_query("INSERT INTO {taxonomy_term_edge_order} (vid, parent, eid)
+    SELECT :vid, op.parent, op.eid
+    FROM {taxonomy_term_edge} op
+    WHERE op.vid = :vid
+    ORDER BY " . _taxonomy_edge_generate_term_path_query('op.tid')
+  , array(':vid' => $vid))->rowCount();
+
+  $context['success'] = TRUE;
+  $context['finished'] = 1;
+  $context['results'][] = t('Tree %name sorted: %rows edges in %time seconds',
+      array('%rows' => $total_rows, '%time' => sprintf("%.03f", microtime(TRUE) - $time), '%name' => $vocabulary->name)
+  );
+
+  db_insert('taxonomy_term_edge_order')
+    ->fields(array('vid' => -$vid))
+    ->execute();
+
+  lock_release('taxonomy_edge_rebuild_edges_' . $vid);
+}

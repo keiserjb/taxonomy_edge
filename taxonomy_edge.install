@@ -28,15 +28,6 @@ function taxonomy_edge_uninstall() {
 }
 
 /**
- * Implements hook_enable().
- */
-function taxonomy_edge_enable() {
-  // Rebuild the edge list when module is enabled
-  #drupal_load('module', 'taxonomy_edge');
-  #taxonomy_edge_rebuild_batch();
-}
-
-/**
  * Implements hook_schema().
  */
 function taxonomy_edge_schema() {
@@ -87,6 +78,41 @@ function taxonomy_edge_schema() {
     ),
   );
 
+  $schema['taxonomy_term_edge_order'] = array(
+    'description' => 'Sequencing table for sorting taxonomies.',
+    'fields' => array(
+      'oid' => array(
+        'description' => 'Order ID',
+        'type' => 'serial',
+      ),
+      'vid' => array(
+        'description' => 'Vocabulary ID',
+        'type' => 'int',
+        'unsigned' => FALSE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'parent' => array(
+        'description' => 'Parent term ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'eid' => array(
+        'description' => 'Edge ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+    ),
+    'primary key' => array('oid'),
+    'indexes' => array(
+      'idx_vocab' => array('vid'),
+      'idx_order' => array('parent', 'oid'),
+    ),
+  );
   return $schema;
 }
 
@@ -139,6 +165,77 @@ function taxonomy_edge_update_6101(&$sandbox) {
   module_load_include('rebuild.inc', 'taxonomy_edge');
   $sub_context = array();
   taxonomy_edge_rebuild_edges($vocabulary->vid, $sub_context);
+  $sandbox['message'] = array_merge($sandbox['message'], $sub_context['results']);
+
+  // Next step or finish.
+  $sandbox['#finished'] = (2 + $current) / ($number_of_vocabularies + 1);
+  return implode('<br/>', $sandbox['message']);
+}
+
+/**
+ * Add table for presorted trees.
+ */
+function taxonomy_edge_update_6102(&$sandbox) {
+  if (!isset($sandbox['vocabularies'])) {
+
+    // Add order table
+    $schema = array(
+      'description' => 'Sequencing table for sorting taxonomies.',
+      'fields' => array(
+        'oid' => array(
+          'description' => 'Order ID',
+          'type' => 'serial',
+        ),
+        'vid' => array(
+          'description' => 'Vocabulary ID',
+          'type' => 'int',
+          'unsigned' => FALSE,
+          'not null' => TRUE,
+          'default' => 0
+        ),
+        'parent' => array(
+          'description' => 'Parent term ID',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0
+        ),
+        'eid' => array(
+          'description' => 'Edge ID',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0
+        ),
+      ),
+      'primary key' => array('oid'),
+      'indexes' => array(
+        'idx_order' => array('vid', 'parent', 'oid'),
+      ),
+    );
+
+    db_create_table('taxonomy_term_edge_order', $schema);
+
+    // Initialize vocabularies to rebuild.
+    $sandbox['vocabularies'] = array_values(taxonomy_get_vocabularies());
+    $sandbox['number_of_vocabularies'] = count($sandbox['vocabularies']);
+    $sandbox['current'] = 0;
+    $sandbox['#finished'] = 1 / ($sandbox['number_of_vocabularies'] + 1);
+    $sandbox['message'] = array();
+
+    return t('Table created.');
+  }
+
+  // Grab next vocabulary to be processed.
+  $vocabularies = $sandbox['vocabularies'];
+  $number_of_vocabularies = $sandbox['number_of_vocabularies'];
+  $current = &$sandbox['current'];
+  $vocabulary = $vocabularies[$current++];
+  
+  // Process that vocabulary
+  module_load_include('rebuild.inc', 'taxonomy_edge');
+  $sub_context = array();
+  taxonomy_edge_rebuild_order($vocabulary->vid, $sub_context);
   $sandbox['message'] = array_merge($sandbox['message'], $sub_context['results']);
 
   // Next step or finish.

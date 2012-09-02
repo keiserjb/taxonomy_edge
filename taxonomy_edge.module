@@ -124,6 +124,22 @@ function taxonomy_edge_menu() {
 }
 
 /**
+ * Implements hook_cron().
+ *
+ * Rebuild sorted tree if invalid
+ */
+function taxonomy_edge_cron() {
+  module_load_include('rebuild.inc', 'taxonomy_edge');
+  foreach (taxonomy_get_vocabularies() as $vocabulary) {
+    if (!taxonomy_edge_is_order_valid($vocabulary->vid)) {
+      $context = array();
+      taxonomy_edge_rebuild_order($vocabulary->vid, $context);
+      taxonomy_edge_rebuild_finished($context['success'], $context['results'], array());
+    }
+  }
+}
+
+/**
  * Implements hook_cronapi().
  * Regularly rebuild the edge list
  */
@@ -227,6 +243,16 @@ function taxonomy_edge_form_taxonomy_overview_vocabularies_alter(&$form, &$form_
         '#type' => 'link',
         '#title' => t('rebuild edges'),
         '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/edges"
+      );
+      $form[$vocabulary->vid]['rebuild_order'] = array(
+        '#type' => 'link',
+        '#title' => t('rebuild order'),
+        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/order"
+      );
+      $form[$vocabulary->vid]['rebuild_all'] = array(
+        '#type' => 'link',
+        '#title' => t('rebuild everything'),
+        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/all"
       );
     }
     $form['#theme'] = 'taxonomy_edge_overview_vocabularies';
@@ -441,6 +467,7 @@ function _taxonomy_edge_attach_subtree($vid, $tid, $parents) {
   INNER JOIN {taxonomy_term_edge} e2 ON e.tid IN (:parents) AND e2.parent = :tid
   WHERE e.vid = :vid AND e2.vid = :vid
   ", array(':tid' => $tid, ':parents' => $parents, ':vid' => $vid));
+  taxonomy_edge_invalidate_order($vid);
 }
 
 /**
@@ -482,6 +509,8 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
       WHERE e.tid IN (:parents)
       AND e.vid = :vid
     ", array(':vid' => $term->vid, ':tid' => $term->tid, ':parents' => $parents));
+
+    taxonomy_edge_invalidate_order($term->vid);
   }
   else {
     watchdog('taxonomy_edge', 'Invalid term-id (%tid) received', array('%tid' => $term->tid), WATCHDOG_ERROR);
@@ -496,10 +525,17 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
 function _taxonomy_edge_taxonomy_term_update($term) {
   $tx = db_transaction();
 
+  // Invalidate sorted tree in case of name/weight change
+  $modified = &drupal_static('taxonomy_edge_save_check_modified', TRUE);
+  if ($modified) {
+    taxonomy_edge_invalidate_order($term->vid);
+  }
+
   if (!isset($term->parent)) {
     // Parent not set, no need to update hierarchy.
     return;
   }
+
 
   // Derive proper parents.
   $parents = _taxonomy_edge_unify_parents($term->parent);
@@ -632,6 +668,41 @@ function taxonomy_edge_is_build_realtime($vid) {
     return TRUE;
   }
   return FALSE;
+}
+
+/**
+ * Check if our sorted tree is still valid
+ */
+function taxonomy_edge_is_order_valid($vid, $reset = FALSE) {
+  static $valid_orders = array();
+  if ($reset || !isset($valid_orders[$vid])) {
+    $valid_orders[$vid] = db_query_range("SELECT 1 FROM {taxonomy_term_edge_order} WHERE vid = :vid", 0, 1, array(':vid' => -$vid))->fetchField();
+  }
+  return $valid_orders[$vid];
+}
+
+/**
+ * Check if our sorted tree is still valid
+ */
+function taxonomy_edge_is_order_invalid($reset = FALSE) {
+  static $invalid;
+  if ($reset || !isset($valid)) {
+    $invalid = db_query_range("SELECT 1
+      FROM {taxonomy_vocabulary} v
+      LEFT JOIN {taxonomy_term_edge_order} o ON -o.vid = v.vid AND o.vid < 0
+      WHERE o.oid IS NULL
+    ;", 0, 1)->fetchField();
+  }
+  return $invalid;
+}
+
+/**
+ * Invalidate order for a vocabulary
+ */
+function taxonomy_edge_invalidate_order($vid) {
+  db_delete('taxonomy_term_edge_order')
+    ->condition('vid', -$vid)
+    ->execute();
 }
 
 /**
