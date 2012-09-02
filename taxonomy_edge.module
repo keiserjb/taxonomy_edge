@@ -36,7 +36,7 @@ define('TAXONOMY_EDGE_STATIC_CACHING', FALSE);
 /**
  * Default value for optimized tree.
  */
-define('TAXONOMY_EDGE_OPTIMIZED_GET_TREE', FALSE);
+define('TAXONOMY_EDGE_OPTIMIZED_GET_TREE', TRUE);
 
 // ---------- HOOKS ----------
 
