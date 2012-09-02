@@ -132,10 +132,19 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
  * @see taxonomy_get_tree()
  */
 function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE) {
-  $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
+  $vocabulary = taxonomy_vocabulary_load($vid);
 
+  // Optimized version does not work with multiple parents
+  if ($vocabulary->hierarchy == 2) {
+    return taxonomy_edge_get_tree_generic($vid, $parent, $max_depth, $load_entities);
+  }
+
+
+  // Setup static cache if applicable
+  $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
   $cache = &drupal_static('taxonomy_edge_tree_cache', array());
 
+  // Return cache if present
   if ($static_cache && isset($cache[$parent])) {
     $tree = array();
     for ($i = $cache[$parent]['offset']; $i < $cache[$parent]['offset'] + $cache[$parent]['count']; $i++) {

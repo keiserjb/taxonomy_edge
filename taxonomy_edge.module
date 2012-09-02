@@ -367,7 +367,7 @@ function taxonomy_edge_process_queue_item($vid) {
  *     0: Delete entire subtree
  *     1: Delete ancestors (detach children from parents in $tids)
  */
-function _taxonomy_edge_delete_subtree($vid, $tid, $type = 0) {
+function _taxonomy_edge_delete_subtree($vid, $tids, $type = 0) {
   // @fixme MySQL can not use EXISTS or IN without temp tables when deleting.
   //        SQLite cannot perform join delete.
   //        MySQL and Postgres differ in joined delete syntax.
@@ -381,10 +381,10 @@ function _taxonomy_edge_delete_subtree($vid, $tid, $type = 0) {
       db_query("DELETE e2.*
         FROM {taxonomy_term_edge} e
         INNER JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid
-        WHERE e.parent = :tid
+        WHERE e.parents IN (:tids)
         $type
         AND e.vid = :vid AND e2.vid = :vid
-      ", array(':tid' => $tid, ':vid' => $vid));
+      ", array(':tids' => $tids, ':vid' => $vid));
       break;
 
     default:
@@ -393,10 +393,10 @@ function _taxonomy_edge_delete_subtree($vid, $tid, $type = 0) {
         SELECT e2.eid
         FROM {taxonomy_term_edge} e
         INNER JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid
-        WHERE e.parent = :tid
+        WHERE e.parent IN (:tids)
         $type
         AND e.vid = :vid AND e2.vid = :vid
-      )",  array(':tid' => $tid, ':vid' => $vid));
+      )",  array(':tids' => $tids, ':vid' => $vid));
       break;
   }
 }
@@ -404,8 +404,8 @@ function _taxonomy_edge_delete_subtree($vid, $tid, $type = 0) {
 /**
  * Detach children from parents in $tids (delete ancestors)
  */
-function _taxonomy_edge_detach_subtree($vid, $tid) {
-  return _taxonomy_edge_delete_subtree($vid, $tid, 1);
+function _taxonomy_edge_detach_subtree($vid, $tids) {
+  return _taxonomy_edge_delete_subtree($vid, $tids, 1);
 }
 
 /**
@@ -418,29 +418,29 @@ function _taxonomy_edge_detach_subtree($vid, $tid) {
  * @param $parents
  *   Term ID of new parents
  */
-function _taxonomy_edge_attach_subtree($vid, $tid, $parent) {
+function _taxonomy_edge_attach_subtree($vid, $tid, $parents) {
   // Build new parents
   db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
   SELECT :vid, e2.tid, e.parent, e.distance + e2.distance + 1 AS distance
   FROM {taxonomy_term_edge} e
-  INNER JOIN {taxonomy_term_edge} e2 ON e.tid = :parent AND e2.parent = :tid
+  INNER JOIN {taxonomy_term_edge} e2 ON e.tid IN (:parents) AND e2.parent = :tid
   WHERE e.vid = :vid AND e2.vid = :vid
-  ", array(':tid' => $tid, ':parent' => $parent, ':vid' => $vid));
+  ", array(':tid' => $tid, ':parents' => $parents, ':vid' => $vid));
 }
 
 /**
- * Detach path and children from current parent and attach to new parent
+ * Detach path and children from current parent and attach to new parents
  *
  * @param $vid
  *   Vocabulary ID
  * @param $tid
  *   Term ID
- * @param $parent
- *   Term ID of new parent
+ * @param $parents
+ *   Term ID of new parents
  */
-function _taxonomy_edge_move_subtree($vid, $tid, $parent) {
-  _taxonomy_edge_detach_subtree($vid, $tid);
-  _taxonomy_edge_attach_subtree($vid, $tid, $parent);
+function _taxonomy_edge_move_subtree($vid, $tid, $parents) {
+  _taxonomy_edge_detach_subtree($vid, array($tid));
+  _taxonomy_edge_attach_subtree($vid, $tid, $parents);
 }
 
 /**
@@ -450,13 +450,9 @@ function _taxonomy_edge_move_subtree($vid, $tid, $parent) {
  */
 function _taxonomy_edge_taxonomy_term_insert($term) {
   $vocabulary = taxonomy_vocabulary_load($term->vid);
-  if ($vocabulary->hierarchy == 2) {
-    return;
-  }
 
-  // Derive proper parent.
+  // Derive proper parents.
   $parents = _taxonomy_edge_unify_parents($term->parent);
-  $parent = $parents ? reset($parents) : 0;
 
   if ($term->tid > 0) {
     $tx = db_transaction();
@@ -468,9 +464,9 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
     db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
       SELECT :vid AS vid, :tid AS tid, e.parent, e.distance + 1 AS distance
       FROM {taxonomy_term_edge} e
-      WHERE e.tid = :parent
+      WHERE e.tid IN (:parents)
       AND e.vid = :vid
-    ", array(':vid' => $term->vid, ':tid' => $term->tid, ':parent' => $parent));
+    ", array(':vid' => $term->vid, ':tid' => $term->tid, ':parents' => $parents));
   }
   else {
     watchdog('taxonomy_edge', 'Invalid term-id (%tid) received', array('%tid' => $term->tid), WATCHDOG_ERROR);
@@ -491,18 +487,9 @@ function _taxonomy_edge_taxonomy_term_update($term) {
   }
 
   // Derive proper parents.
-  // After this $new contains parents to be added
-  // and $del contains parents to removed.
   $parents = _taxonomy_edge_unify_parents($term->parent);
-  $parent = reset($parents);
 
-  $old_parent = db_query("SELECT e.parent
-    FROM {taxonomy_term_edge} e
-    WHERE e.tid = :tid
-    AND e.distance = 1
-  ", array(':tid' => $term->tid))->fetchField();
-
-  _taxonomy_edge_move_subtree($term->vid, $term->tid, $parent);
+  _taxonomy_edge_move_subtree($term->vid, $term->tid, $parents);
 }
 
 /**
@@ -570,12 +557,12 @@ function _taxonomy_edge_generate_term_path_query($tid) {
   $db_type = Database::getConnection()->databaseType();
   switch ($db_type) {
     case 'pgsql':
-      return "(SELECT array_to_string(array_agg(((tpx.weight + 1500) || tpx.name || '    ' || tpx.tid)), '    ') FROM (SELECT tpd.* FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.pid = $pid AND tpe.vid = $vid ORDER BY tpe.distance DESC) tpx)";
+      return "(SELECT array_to_string(array_agg(((tpx.weight + 1500) || tpx.name || '    ' || tpx.tid)), '    ') FROM (SELECT tpd.* FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC) tpx)";
     case 'mysql':
     case 'mysqli':
       return "(SELECT GROUP_CONCAT(tpd.weight + 1500, tpd.name, '    ', tpd.tid ORDER BY tpe.distance DESC SEPARATOR '    ') FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid)";
     case 'sqlite':
-      return "(SELECT GROUP_CONCAT(val, '    ') FROM (SELECT (tpd.weight + 1500) || tpd.name || '    ' || tpd.tid AS val FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.pid = $pid AND tpe.vid = $vid ORDER BY tpe.distance DESC))";
+      return "(SELECT GROUP_CONCAT(val, '    ') FROM (SELECT (tpd.weight + 1500) || tpd.name || '    ' || tpd.tid AS val FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC))";
     default:
   }
 }
@@ -653,6 +640,24 @@ function taxonomy_edge_get_parents($tid) {
 }
 
 /**
+ * Get top term ids.
+ *
+ * @param $tid
+ *   Term ID to get top term ID from.
+ * @return array
+ *   Top term IDs.
+ */
+function taxonomy_edge_get_top_tids($tid) {
+  return db_query("SELECT DISTINCT e2.parent
+    FROM {taxonomy_term_edge} e
+    JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid AND e2.distance = e.distance - 1 AND e2.parent <> e.parent
+    WHERE e.tid = :tid 
+    AND e.parent = 0
+    AND e.vid = e2.vid
+  ", array(':tid' => $tid))->fetchAllKeyed(0, 0);
+}
+
+/**
  * Get top term id.
  *
  * @param $tid
@@ -661,15 +666,8 @@ function taxonomy_edge_get_parents($tid) {
  *   Top term ID.
  */
 function taxonomy_edge_get_top_tid($tid) {
-  return db_query("SELECT e2.parent
-    FROM {taxonomy_term_edge} e
-    JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid AND e2.distance = e.distance - 1
-    WHERE e.tid = :tid 
-    AND e.parent = 0
-    AND e.vid = e2.vid
-  ", array(':tid' => $tid))->fetchField();
+  return taxonomy_edge_get_top_tids(array($tid));
 }
-
 
 // ---------- CORE OVERRIDES ----------
 

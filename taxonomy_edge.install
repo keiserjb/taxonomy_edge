@@ -43,6 +43,13 @@ function taxonomy_edge_schema() {
   $schema['taxonomy_term_edge'] = array(
     'description' => 'Stores edge list for taxonomies.',
     'fields' => array(
+      'eid' => array(
+        'description' => 'Edge ID',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
       'vid' => array(
         'description' => 'Vocabulary ID',
         'type' => 'int',
@@ -72,7 +79,7 @@ function taxonomy_edge_schema() {
         'default' => 0
       ),
     ),
-    'primary key' => array('tid', 'parent', 'vid'),
+    'primary key' => array('eid'),
     'indexes' => array(
       'idx_depth' => array('vid', 'distance', 'parent'),
       'idx_term' => array('tid', 'distance'),

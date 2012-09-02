@@ -106,12 +106,10 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
       FROM {taxonomy_term_edge} e 
       INNER JOIN {taxonomy_term_hierarchy} h ON h.tid = e.parent
       INNER JOIN {taxonomy_term_data} d ON d.tid = h.tid
-      -- LEFT JOIN {taxonomy_term_edge} e2 ON e2.vid = :vid AND e2.tid = e.tid AND e2.parent = h.parent
       WHERE e.distance = :depth 
       AND e.vid = :vid
       AND h.tid <> 0
       AND h.tid <> h.parent
-      -- AND e2.tid IS NULL
     ", array(':vid' => $vid, ':depth' => $depth));
 
     $rows = $result->rowCount();
