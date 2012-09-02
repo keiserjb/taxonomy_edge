@@ -7,8 +7,8 @@
  */
 class TaxonomyEdgeTreeTestCase extends DrupalWebTestCase {
   function setUp() {
-    #parent::setUp(array('taxonomy_edge'));
-    $this->setup = TRUE;
+    parent::setUp(array('taxonomy_edge'));
+    #$this->setup = TRUE;
 
     $this->treeInit();
     module_load_include('core.inc', 'taxonomy_edge');
@@ -17,7 +17,7 @@ class TaxonomyEdgeTreeTestCase extends DrupalWebTestCase {
   function tearDown() {
     $vocabulary = &drupal_static('vocabulary', new stdClass);
     taxonomy_vocabulary_delete($vocabulary->vid);
-    #parent::tearDown();
+    parent::tearDown();
   }
 
   public static function getInfo() {
