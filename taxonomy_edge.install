@@ -109,8 +109,8 @@ function taxonomy_edge_schema() {
     ),
     'primary key' => array('oid'),
     'indexes' => array(
-      'idx_vocab' => array('vid'),
-      'idx_order' => array('parent', 'oid'),
+      'idx_order' => array('vid', 'parent'),
+      'idx_edge' => array('eid'),
     ),
   );
   return $schema;

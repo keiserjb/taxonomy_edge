@@ -93,7 +93,7 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
   }
 
   // Acquire lock to avoid conflicts with queue
-  if (!lock_acquire('taxonomy_edge_rebuild')) {
+  if (!lock_acquire('taxonomy_edge_rebuild_edges_' . $vid)) {
     $context['success'] = FALSE;
     $context['results'][] = t('Could not acquire lock!');
     return;
@@ -109,9 +109,8 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
   // Please use a proper isolation level, so that transaction provides us with a
   // snapshot
   $tx = db_transaction();
-  lock_release('taxonomy_edge_rebuild');
 
-  // taxonomy_edge_taxonomy_vocabulary_delete($vocabulary);
+  // Clear out edge data for vocabulary.
   taxonomy_edge_taxonomy_vocabulary_insert($vocabulary);
 
   $result = db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
@@ -150,9 +149,12 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
     $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
     $context['finished'] += (1 - $context['finished']) / 2;
   }
+  taxonomy_edge_invalidate_order($vid);
+  lock_release('taxonomy_edge_rebuild_edges_' . $vid);
+
   $context['success'] = TRUE;
   $context['finished'] = 1;
-  $context['results'][] = t('Taxonomy edges rebuilt for %name: %rows processed with depth %depth in %time seconds',
+  $context['results'][] = t('%name rebuilt: %rows processed with depth %depth in %time seconds',
       array('%rows' => $total_rows, '%depth' => $depth, '%time' => sprintf("%.03f", microtime(TRUE) - $time), '%name' => $vocabulary->name)
   );
 
@@ -192,7 +194,7 @@ function taxonomy_edge_rebuild_order($vid, &$context) {
 
   $context['success'] = TRUE;
   $context['finished'] = 1;
-  $context['results'][] = t('Tree %name sorted: %rows edges in %time seconds',
+  $context['results'][] = t('%name sorted: %rows edges in %time seconds',
       array('%rows' => $total_rows, '%time' => sprintf("%.03f", microtime(TRUE) - $time), '%name' => $vocabulary->name)
   );
 
