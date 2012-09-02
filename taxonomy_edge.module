@@ -362,9 +362,6 @@ function taxonomy_edge_process_queue_item($vid) {
 function taxonomy_edge_cron_rebuild() {
   module_load_include('rebuild.inc', 'taxonomy_edge');
   foreach (taxonomy_get_vocabularies() as $vocabulary) {
-    if (!in_array($vocabulary->vid, array(1,2,4,5,6,7,8))) {
-      continue;
-    }
     $context = array();
     taxonomy_edge_rebuild_edges($vocabulary->vid, $context);
     taxonomy_edge_rebuild_finished($context['success'], $context['results'], array());
