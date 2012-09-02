@@ -39,7 +39,6 @@ function taxonomy_edge_schema() {
         'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
-        'default' => 0
       ),
       'vid' => array(
         'description' => 'Vocabulary ID',
