@@ -13,7 +13,6 @@
  * WHERE e.parent = 14;
  *
  * @todo Fix concurrency issue for queue rebuild and full tree rebuild (lock_may_be_available() inside transaction)
- * @todo Make static caching possible in the get_tree override functions (optimization)
  * @todo Fix drag'n'drop on interface for multiple parents
  *
  * @see README.txt
@@ -122,17 +121,6 @@ function taxonomy_edge_menu() {
   );
 
   return $items;
-}
-
-/**
- * Implements hook_cron().
- *
- * Rebuild sorted tree if invalid
- */
-function taxonomy_edge_cron() {
-  module_load_include('rebuild.inc', 'taxonomy_edge');
-  foreach (taxonomy_get_vocabularies() as $vocabulary) {
-  }
 }
 
 /**

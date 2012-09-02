@@ -7,20 +7,19 @@ for each term using the adjecency matrix graph theory:
   http://en.wikipedia.org/wiki/Adjacency_matrix
 
 Visit the project page:
-  http://drupal.org/sandbox/gielfeldt/1090284
+  http://drupal.org/project/taxonomy_edge
 
 
 Requirements
 ------------
-Currently only MySQL is supported.
-Elysia Cron or Parallel Cron (or other hook_cronapi() compatible cron system) for cronjob to work.
+Taxonomy module (and the Views module for the Views Taxonomy Edge module)
 
 
 Installation
 ------------
 Place in modules folder and enable it from /admin/build/modules
 
-Apply the core patch if you like:
+Apply the core patch if you like (or use the Core Override module at your own risk :-)):
 %> cd /path/to/drupal
 %> patch -p1 < sites/all/modules/taxonomy_edge/taxonomy-<drupal-version>.patch
 
@@ -38,43 +37,42 @@ Rebuilding of edges can be necessary if the table gets out of sync.
 SQL
 ------
 
-The following select statements can be used as help or inspiration to use the term_edge table:
+The following select statements can be used as help or inspiration to use the taxonomy_term_edge table:
 
-Get the top level term IDs for each term in vocabulary vid:1:
+Get the top level term IDs for the term 14:
 
-SELECT te.tid, h.tid AS top_tid
-FROM term_edge te
-JOIN term_hierarchy h ON te.parent = h.tid
-JOIN term_data d ON d.tid = te.tid
-WHERE h.parent = 0
-AND d.vid = 1;
+SELECT DISTINCT e2.parent
+FROM taxonomy_term_edge e
+JOIN taxonomy_term_edge e2 ON e2.tid = e.tid AND e2.distance = e.distance - 1 AND e2.parent <> e.parent
+WHERE e.tid = 14
+AND e.parent = 0
+AND e.vid = e2.vid
 
 
 Generate a list of materialized paths for each term in vocabulary vid:1, in the correct order:
 
 SELECT d2.*, e2.parent, e2.distance,
 (
-SELECT CONCAT('"', GROUP_CONCAT(d.name ORDER BY e.distance DESC SEPARATOR '/'), '"') AS path FROM term_edge e JOIN term_data d ON e.parent = d.tid WHERE e.tid = e2.tid ORDER BY e.distance DESC
+SELECT CONCAT('"', GROUP_CONCAT(d.name ORDER BY e.distance DESC SEPARATOR '/'), '"') AS path FROM taxonomy_term_edge e JOIN taxonomy_term_data d ON e.parent = d.tid WHERE e.tid = e2.tid ORDER BY e.distance DESC
 ) AS path,
 (
-SELECT GROUP_CONCAT(d.weight + 1500, '    ', d.name ORDER BY e.distance DESC SEPARATOR '    ') AS path FROM term_edge e JOIN term_data d ON e.parent = d.tid WHERE e.tid = e2.tid ORDER BY e.distance DESC
+SELECT GROUP_CONCAT(d.weight + 1500, '    ', d.name ORDER BY e.distance DESC SEPARATOR '    ') AS path FROM taxonomy_term_edge e JOIN taxonomy_term_data d ON e.parent = d.tid WHERE e.tid = e2.tid ORDER BY e.distance DESC
 ) AS sort_path
-FROM term_edge e2
-JOIN term_hierarchy h ON h.tid = e2.parent
-JOIN term_data d2 ON e2.tid = d2.tid
-WHERE d2.vid = 1
-AND h.parent = 0
+FROM taxonomy_term_edge e2
+JOIN taxonomy_term_data d ON d.tid = e2.tid
+WHERE e2.vid = 1
+AND e2.parent = 0
 ORDER BY sort_path;
 
 
 Get all parents of a term tid:12
 
-SELECT * FROM term_edge WHERE tid = 12 AND distance > 0;
+SELECT * FROM taxonomy_term_edge WHERE tid = 12 AND distance > 0;
 
 
 Get all children of a term tid:12
 
-SELECT * FROM term_edge WHERE parent = 12;
+SELECT * FROM taxonomy_term_edge WHERE parent = 12;
 
 
 
