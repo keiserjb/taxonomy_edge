@@ -381,7 +381,7 @@ function _taxonomy_edge_delete_subtree($vid, $tids, $type = 0) {
       db_query("DELETE e2.*
         FROM {taxonomy_term_edge} e
         INNER JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid
-        WHERE e.parents IN (:tids)
+        WHERE e.parent IN (:tids)
         $type
         AND e.vid = :vid AND e2.vid = :vid
       ", array(':tids' => $tids, ':vid' => $vid));
