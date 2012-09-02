@@ -1,4 +1,7 @@
 <?php
+/**
+ * @file
+ */
 
 /**
  * Views sort handler to sort by taxonomy terms' hierarchy order.

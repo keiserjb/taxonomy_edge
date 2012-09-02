@@ -120,14 +120,14 @@ function taxonomy_edge_update_6101() {
 }
 
 /**
- * Implements hook_install
+ * Implements hook_install().
  */
 function _taxonomy_edge_install() {
   db_add_index('node', 'idx_taxonomy_edge', array('sticky', 'created', 'nid'));
 }
 
 /**
- * Implements hook_uninstall
+ * Implements hook_uninstall().
  */
 function _taxonomy_edge_uninstall() {
   db_drop_index('node', 'idx_taxonomy_edge');

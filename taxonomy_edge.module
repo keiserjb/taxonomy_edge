@@ -219,7 +219,7 @@ function taxonomy_edge_form_taxonomy_overview_terms_alter(&$form, &$form_state) 
  */
 function taxonomy_edge_form_taxonomy_overview_vocabularies_alter(&$form, &$form_state) {
   if (user_access('administer taxonomy edge')) {
-    foreach(taxonomy_get_vocabularies() as $vocabulary){
+    foreach (taxonomy_get_vocabularies() as $vocabulary) {
       $form[$vocabulary->vid]['rebuild_edges'] = array(
         '#type' => 'link',
         '#title' => t('rebuild edges'),
@@ -233,7 +233,7 @@ function taxonomy_edge_form_taxonomy_overview_vocabularies_alter(&$form, &$form_
 /**
  * Implementation of hook_theme().
  */
-function taxonomy_edge_theme(){
+function taxonomy_edge_theme() {
   return array(
     'taxonomy_edge_overview_vocabularies' => array(
       'render element' => 'form',

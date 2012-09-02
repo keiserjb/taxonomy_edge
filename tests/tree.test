@@ -152,7 +152,7 @@ sub3
     $vocabulary = &drupal_static('vocabulary', new stdClass());
     $vocabulary->name = 'taxonomy_edge_test1';
     $vocabulary->description = 'taxonomy_edge_test1';
-    $vocabulary->machine_name = 'taxonomy_edge_test1' . rand(0,10000);
+    $vocabulary->machine_name = 'taxonomy_edge_test1' . rand(0, 10000);
     $vocabulary->help = '';
     taxonomy_vocabulary_save($vocabulary);
 
