@@ -32,12 +32,12 @@ define('TAXONOMY_EDGE_BUILD_REALTIME', TRUE);
 /**
  * Default value for static caching.
  */
-define('TAXONOMY_EDGE_STATIC_CACHING', TRUE);
+define('TAXONOMY_EDGE_STATIC_CACHING', FALSE);
 
 /**
  * Default value for optimized tree.
  */
-define('TAXONOMY_EDGE_OPTIMIZED_GET_TREE', TRUE);
+define('TAXONOMY_EDGE_OPTIMIZED_GET_TREE', FALSE);
 
 // ---------- HOOKS ----------
 
