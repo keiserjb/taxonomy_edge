@@ -81,7 +81,7 @@ function taxonomy_edge_menu() {
   $items = array();
 
   // Bring /level and /all back into taxonomy pages and feeds
-  $items['taxonomy/term/%taxonomy_term/%'] = array(
+  $items['taxonomy/term/%taxonomy_term'] = array(
     'title' => 'Taxonomy term',
     'title callback' => 'taxonomy_term_title',
     'title arguments' => array(2),

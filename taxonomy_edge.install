@@ -72,7 +72,8 @@ function taxonomy_edge_schema() {
     ),
     'primary key' => array('eid'),
     'indexes' => array(
-      'idx_depth' => array('vid', 'distance', 'parent'),
+      'idx_update' => array('vid', 'distance', 'parent'),
+      'idx_depth' => array('parent', 'distance', 'vid'),
       'idx_term' => array('tid', 'distance'),
       'idx_tree' => array('parent', 'vid', 'distance'),
     ),
@@ -215,6 +216,10 @@ function taxonomy_edge_update_6102(&$sandbox) {
       ),
     );
 
+    db_drop_index('taxonomy_term_edge', 'idx_depth');
+    db_add_index('taxonomy_term_edge', 'idx_update', array('vid', 'distance', 'parent'));
+    db_add_index('taxonomy_term_edge', 'idx_depth', array('parent', 'distance', 'vid'));
+  
     db_create_table('taxonomy_term_edge_order', $schema);
 
     // Initialize vocabularies to rebuild.
@@ -224,7 +229,7 @@ function taxonomy_edge_update_6102(&$sandbox) {
     $sandbox['#finished'] = 1 / ($sandbox['number_of_vocabularies'] + 1);
     $sandbox['message'] = array();
 
-    return t('Table created.');
+    return t('Table created and indexes updated.');
   }
 
   // Grab next vocabulary to be processed.
