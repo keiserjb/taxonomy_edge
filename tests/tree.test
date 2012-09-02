@@ -46,9 +46,6 @@ sub3
 ";
     $match = $tree == $expect;
     $message = "Tree initialized" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
-    #$mylog = &drupal_static('mylog', array());
-    #file_put_contents('/tmp/mylog', $this->myLog($mylog), FILE_APPEND);
-    #die(print_r($mylog, TRUE));
     $this->assertTRUE($match, $message);
 
     // Move 'test1' to 'sub1'
@@ -131,13 +128,87 @@ sub3
     $message = "Move 'test1' back to root" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
     $this->assertTRUE($match, $message);
 
+
+    // Copy 'test1' to 'sub2'
+    $term = $terms['test1'];
+    $term->parent = array(0, $terms['sub2']->tid);
+    taxonomy_term_save($term);
+
+    $tree = $this->formatTree();
+    $expect = 
+"test1
+- test2
+-- test3
+- test4
+-- test5
+sub1
+sub2
+- test1
+-- test2
+--- test3
+-- test4
+--- test5
+sub3
+";
+    $match = $tree == $expect;
+    $message = "Copy 'test1' to 'sub2'" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
+    $this->assertTRUE($match, $message);
+
+    // Remove 'test1' from root
+    $term = $terms['test1'];
+    $term->parent = array($terms['sub2']->tid);
+    taxonomy_term_save($term);
+
+    $tree = $this->formatTree();
+    $expect = 
+"sub1
+sub2
+- test1
+-- test2
+--- test3
+-- test4
+--- test5
+sub3
+";
+    $match = $tree == $expect;
+    $message = "Remove 'test1' from root" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
+    $this->assertTRUE($match, $message);
+
+    // Copy 'test1' to root
+    $term = $terms['test1'];
+    $term->parent = array(0, $terms['sub2']->tid);
+    taxonomy_term_save($term);
+
+    $tree = $this->formatTree();
+    $expect = 
+"test1
+- test2
+-- test3
+- test4
+-- test5
+sub1
+sub2
+- test1
+-- test2
+--- test3
+-- test4
+--- test5
+sub3
+";
+    $match = $tree == $expect;
+    $message = "Copy 'test1' to root" . ($match ? "" : "\n<pre>Assumed:\n$expect\nGot:\n$tree");
+    $this->assertTRUE($match, $message);
   }
 
   function formatTree() {
     $vocabulary = &drupal_static('vocabulary', new stdClass());
     $vid = $vocabulary->vid;
 
-    $tree = taxonomy_edge_get_tree_optimized($vid);
+    global $conf;
+    $conf['taxonomy_edge_exclude_root'] = FALSE;
+    $conf['taxonomy_edge_static_caching'] = FALSE;
+
+    $tree = taxonomy_edge_get_tree_generic($vid);
     $output = '';
     foreach ($tree as $term) {
       $output .= str_repeat('-', $term->depth);
@@ -166,7 +237,6 @@ sub3
     $tree[] = "sub2";
     $tree[] = "sub3";
 
-    Database::startLog('mylog');
     $terms = &drupal_static('terms', array());
     $weight = 0;
     foreach ($tree as $path) {
@@ -181,8 +251,6 @@ sub3
       taxonomy_term_save($term);
       $terms[$name] = $term;
     }
-    $mylog = &drupal_static('mylog', array());
-    $mylog = Database::getLog('mylog');
   }
 
 

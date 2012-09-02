@@ -11,6 +11,7 @@
  * @see taxonomy_get_tree()
  */
 function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE) {
+  $exclude_root = variable_get('taxonomy_edge_exclude_root', TRUE);
   $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
 
   // @todo Optimize this. Currently we cannot use the static cache when using parent,
@@ -44,11 +45,11 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
       ->orderBy('t.weight')
       ->orderBy('t.name');
 
-    if ($parent) {
+    if ($exclude_root && $parent) {
       $subquery = db_select('taxonomy_term_edge', 'e')
                     ->fields('e', array('tid'))
                     ->condition('e.vid', $vid)
-                    ->condition('e.parent', $parent);
+                    ->condition('e.parent', (int)$parent);
       $query->condition('t.tid', $subquery, 'IN');
     }
 
