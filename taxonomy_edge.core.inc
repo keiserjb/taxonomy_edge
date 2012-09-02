@@ -196,35 +196,32 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
   $result = $query->execute();
 
   $tree = array();
-  $tids = array();
   if ($static_cache) {
     $cache[$parent]['offset'] = 0;
     $cache[$parent]['count'] = 0;
     $cache[$parent]['depth'] = 0;
   }
   foreach ($result as $term) {
-      $term->depth = $term->distance - 1;
-      $term->parents = array($term->parent);
-      unset($term->distance);
-      unset($term->parent);
-      unset($term->sort_path);
-      $tree[$term->tid] = $term;
+    $term->depth = $term->distance - 1;
+    $term->parents = array($term->parent);
+    unset($term->distance);
+    unset($term->parent);
+    unset($term->sort_path);
+    $tree[$term->tid] = $term;
 
-      if ($static_cache) {
-        $cache[$parent]['data'][] = &$tree[$term->tid];
-        $cache[$term->tid]['data'] = &$cache[$parent]['data'];
-        $cache[$term->tid]['count'] = $cache[$parent]['count'];
-        $cache[$term->tid]['offset'] = ++$cache[$parent]['count'];
-        $cache[$term->tid]['depth'] = $term->depth + 1;
-      }
-
-      $tids[] = $term->tid;
+    if ($static_cache) {
+      $cache[$parent]['data'][] = &$tree[$term->tid];
+      $cache[$term->tid]['data'] = &$cache[$parent]['data'];
+      $cache[$term->tid]['count'] = $cache[$parent]['count'];
+      $cache[$term->tid]['offset'] = ++$cache[$parent]['count'];
+      $cache[$term->tid]['depth'] = $term->depth + 1;
+    }
   }
 
   // Load full entities, if necessary. The entity controller statically
   // caches the results.
   if ($load_entities) {
-    $term_entities = taxonomy_term_load_multiple($tids);
+    $term_entities = taxonomy_term_load_multiple(array_keys($tree));
   }
 
   // Original taxonomy_get_tree() has an incremental index. Let's do this as well in a memory efficient way.
