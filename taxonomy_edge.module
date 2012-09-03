@@ -124,6 +124,24 @@ function taxonomy_edge_menu() {
 }
 
 /**
+ * Implements hook_modules_enabled().
+ */
+function taxonomy_edge_modules_enabled($modules) {
+  if (in_array('taxonomy_edge', $modules)) {
+    // Since we're just enabling the module, it should be safe to truncate.
+    // Clearing out the tables will make the rebuild faster, and we're rebuild
+    // everything anyways.
+    db_truncate('taxonomy_term_edge')->execute();
+    db_truncate('taxonomy_term_edge_order')->execute();
+
+    // Rebuild everything.
+    module_load_include('rebuild.inc', 'taxonomy_edge');
+    $vids = array_keys(taxonomy_get_vocabularies());
+    taxonomy_edge_rebuild_all_batch($vids);
+  }
+}
+
+/**
  * Implements hook_cron().
  *
  * Rebuild sorted tree if invalid
