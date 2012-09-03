@@ -273,17 +273,17 @@ function taxonomy_edge_form_taxonomy_overview_vocabularies_alter(&$form, &$form_
       $form[$vocabulary->vid]['rebuild_edges'] = array(
         '#type' => 'link',
         '#title' => t('rebuild edges'),
-        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/edges"
+        '#href' => "admin/structure/taxonomy/rebuild/edges/$vocabulary->machine_name"
       );
       $form[$vocabulary->vid]['rebuild_order'] = array(
         '#type' => 'link',
         '#title' => t('rebuild order'),
-        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/order"
+        '#href' => "admin/structure/taxonomy/rebuild/order/$vocabulary->machine_name"
       );
       $form[$vocabulary->vid]['rebuild_all'] = array(
         '#type' => 'link',
         '#title' => t('rebuild everything'),
-        '#href' => "admin/structure/taxonomy/$vocabulary->machine_name/rebuild/all"
+        '#href' => "admin/structure/taxonomy/rebuild/all/$vocabulary->machine_name"
       );
     }
     $form['#theme'] = 'taxonomy_edge_overview_vocabularies';
