@@ -129,10 +129,10 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
   while ($max_depth-- > 0) {
     $result = db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
       SELECT :vid, e.tid, h.parent, :depth + 1
-      FROM {taxonomy_term_edge} e 
+      FROM {taxonomy_term_edge} e
       INNER JOIN {taxonomy_term_hierarchy} h ON h.tid = e.parent
       INNER JOIN {taxonomy_term_data} d ON d.tid = h.tid
-      WHERE e.distance = :depth 
+      WHERE e.distance = :depth
       AND e.vid = :vid
       AND h.tid <> 0
       AND h.tid <> h.parent

@@ -53,7 +53,7 @@ function taxonomy_edge_term_page($term, $depth = '0') {
     $build['pager'] = array(
       '#theme' => 'pager',
       '#weight' => 5,
-     );
+    );
   }
   else {
     $build['no_content'] = array(

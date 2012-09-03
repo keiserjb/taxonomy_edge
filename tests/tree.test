@@ -34,7 +34,7 @@ class TaxonomyEdgeTreeTestCase extends DrupalWebTestCase {
     $vid = $vocabulary->vid;
 
     $tree = $this->formatTree();
-    $expect = 
+    $expect =
 "test1
 - test2
 -- test3
@@ -54,7 +54,7 @@ sub3
     taxonomy_term_save($term);
 
     $tree = $this->formatTree();
-    $expect = 
+    $expect =
 "sub1
 - test1
 -- test2
@@ -74,7 +74,7 @@ sub3
     taxonomy_term_save($term);
 
     $tree = $this->formatTree();
-    $expect = 
+    $expect =
 "test1
 - test2
 -- test3
@@ -114,7 +114,7 @@ sub3
     taxonomy_term_save($term);
 
     $tree = $this->formatTree();
-    $expect = 
+    $expect =
 "test1
 - test2
 -- test3
@@ -135,7 +135,7 @@ sub3
     taxonomy_term_save($term);
 
     $tree = $this->formatTree();
-    $expect = 
+    $expect =
 "test1
 - test2
 -- test3
@@ -160,7 +160,7 @@ sub3
     taxonomy_term_save($term);
 
     $tree = $this->formatTree();
-    $expect = 
+    $expect =
 "sub1
 sub2
 - test1
@@ -180,7 +180,7 @@ sub3
     taxonomy_term_save($term);
 
     $tree = $this->formatTree();
-    $expect = 
+    $expect =
 "test1
 - test2
 -- test3

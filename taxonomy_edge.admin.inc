@@ -75,14 +75,14 @@ function taxonomy_edge_rebuild_page_confirm($form, &$form_state, $type, $vocabul
       '#value' => $vocabulary
     );
     $msg = t('Are you sure you want to rebuild %type for vocabulary %name?', array(
-             '%type' => $type,
-             '%name' => $vocabulary->name
-           ));
+      '%type' => $type,
+      '%name' => $vocabulary->name
+    ));
   }
   else {
     $msg = t('Are you sure you want to rebuild %type for all vocabularies?', array(
-             '%type' => $type,
-           ));
+      '%type' => $type,
+    ));
   }
 
   $form['type'] = array(

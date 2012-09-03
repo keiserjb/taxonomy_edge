@@ -4,7 +4,7 @@
  */
 
 /**
- * Copy of theme_taxonomy_overview_vocabularies, but with the addition of a 
+ * Copy of theme_taxonomy_overview_vocabularies, but with the addition of a
  * column, and an increase in colspan.
  */
 function theme_taxonomy_edge_overview_vocabularies($variables) {

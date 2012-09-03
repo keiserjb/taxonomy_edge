@@ -160,7 +160,7 @@ function taxonomy_edge_update_6101(&$sandbox) {
   $number_of_vocabularies = $sandbox['number_of_vocabularies'];
   $current = &$sandbox['current'];
   $vocabulary = $vocabularies[$current++];
-  
+
   // Process that vocabulary
   module_load_include('rebuild.inc', 'taxonomy_edge');
   $sub_context = array();
@@ -218,7 +218,7 @@ function taxonomy_edge_update_6102(&$sandbox) {
     db_drop_index('taxonomy_term_edge', 'idx_depth');
     db_add_index('taxonomy_term_edge', 'idx_update', array('vid', 'distance', 'parent'));
     db_add_index('taxonomy_term_edge', 'idx_depth', array('parent', 'distance', 'vid'));
-  
+
     db_create_table('taxonomy_term_edge_order', $schema);
 
     // Initialize vocabularies to rebuild.
@@ -236,7 +236,7 @@ function taxonomy_edge_update_6102(&$sandbox) {
   $number_of_vocabularies = $sandbox['number_of_vocabularies'];
   $current = &$sandbox['current'];
   $vocabulary = $vocabularies[$current++];
-  
+
   // Process that vocabulary
   module_load_include('rebuild.inc', 'taxonomy_edge');
   $sub_context = array();

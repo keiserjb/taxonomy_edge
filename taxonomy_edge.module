@@ -291,7 +291,7 @@ function taxonomy_edge_form_taxonomy_overview_vocabularies_alter(&$form, &$form_
 }
 
 /**
- * Implementation of hook_theme().
+ * Implements hook_theme().
  */
 function taxonomy_edge_theme() {
   return array(
@@ -460,7 +460,7 @@ function _taxonomy_edge_delete_subtree($vid, $tids, $type = 0) {
       break;
 
     default:
-      db_query("DELETE FROM 
+      db_query("DELETE FROM
       {taxonomy_term_edge} WHERE eid IN (
         SELECT e2.eid
         FROM {taxonomy_term_edge} e
@@ -530,7 +530,7 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
   if ($term->tid > 0) {
     $tx = db_transaction();
 
-    db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent) VALUES(:vid, :tid, :tid)", 
+    db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent) VALUES(:vid, :tid, :tid)",
       array(':vid' => $term->vid, ':tid' => $term->tid)
     );
 
@@ -675,7 +675,7 @@ function _taxonomy_edge_get_key() {
  *   Max depth (distance)
  */
 function taxonomy_edge_get_max_depth($vid, $parent = 0) {
-  return db_query("SELECT MAX(distance) FROM {taxonomy_term_edge} WHERE vid = :vid AND parent = :parent", 
+  return db_query("SELECT MAX(distance) FROM {taxonomy_term_edge} WHERE vid = :vid AND parent = :parent",
     array(':vid' => $vid, ':parent' => $parent))->fetchField();
 }
 
@@ -768,7 +768,7 @@ function taxonomy_edge_get_top_tids($tid) {
   return db_query("SELECT DISTINCT e2.parent
     FROM {taxonomy_term_edge} e
     JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid AND e2.distance = e.distance - 1 AND e2.parent <> e.parent
-    WHERE e.tid = :tid 
+    WHERE e.tid = :tid
     AND e.parent = 0
     AND e.vid = e2.vid
   ", array(':tid' => $tid))->fetchAllKeyed(0, 0);
@@ -820,7 +820,7 @@ function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth 
   if ($depth == 0) {
     $args = $order ? array($tid, $pager, $limit, $order) : array($tid, $pager, $limit);
     return call_user_func_array('taxonomy_select_nodes', $args);
-  } 
+  }
 
   // Set default order if not specified
   if (!isset($order)) {
@@ -844,7 +844,7 @@ function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth 
   $query->condition('t.tid', $subquery, 'IN');
   if ($pager) {
     $count_query = db_select('taxonomy_index', 't');
-    $count_query->join('taxonomy_term_edge', 'e', 'e.tid = t.tid'); 
+    $count_query->join('taxonomy_term_edge', 'e', 'e.tid = t.tid');
     $count_query->condition('e.parent', $tid);
     $count_query->condition('e.vid', $vid);
     $count_query->condition('e.distance', $depth, '<=');

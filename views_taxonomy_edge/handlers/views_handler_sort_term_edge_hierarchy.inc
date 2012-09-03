@@ -8,7 +8,7 @@
  */
 class views_handler_sort_term_edge_hierarchy extends views_handler_sort {
   /**
-   * Overridden to add the ORDER BY clause and join required tables. 
+   * Overridden to add the ORDER BY clause and join required tables.
    */
   function query() {
     $edge = $this->query->ensure_table('taxonomy_term_edge');

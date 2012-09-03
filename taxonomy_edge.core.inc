@@ -183,7 +183,7 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
   if ($max_depth) {
     $query->condition('e.distance', $max_depth, '<=');
   }
-  
+
   if ($valid_order) {
     $query->join('taxonomy_term_edge_order', 'o', 'o.eid = e.eid AND o.parent = e.parent AND o.vid = ' . intval($vid));
     $query->orderBy('o.oid');
