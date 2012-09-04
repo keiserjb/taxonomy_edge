@@ -49,7 +49,8 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
       $subquery = db_select('taxonomy_term_edge', 'e')
                     ->fields('e', array('tid'))
                     ->condition('e.vid', $vid)
-                    ->condition('e.parent', (int)$parent);
+                    ->condition('e.parent', $parent)
+                    ->condition('e.distance', 0, '>');
       $query->condition('t.tid', $subquery, 'IN');
     }
 
