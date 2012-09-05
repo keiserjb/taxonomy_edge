@@ -137,7 +137,9 @@ function taxonomy_edge_modules_enabled($modules) {
     // Rebuild everything.
     module_load_include('rebuild.inc', 'taxonomy_edge');
     $vids = array_keys(taxonomy_get_vocabularies());
-    taxonomy_edge_rebuild_all_batch($vids);
+    if (strpos(request_uri(), '/batch') !== 0) {
+      taxonomy_edge_rebuild_all_batch($vids);
+    }
   }
 }
 
