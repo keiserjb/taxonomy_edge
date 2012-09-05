@@ -49,7 +49,7 @@ function views_taxonomy_edge_views_data_alter(&$data) {
     'field' => 'tid',
     'left_field' => 'tid',
     'type' => 'INNER',
-    'extra' => '{taxonomy_term_edge}.vid = {taxonomy_term_data}.vid',
+    'extra' => '{taxonomy_term_edge}.vid = {taxonomy_vocabulary}.vid',
     'handler' => 'views_join_term_edge',
   );
 
