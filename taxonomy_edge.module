@@ -493,7 +493,7 @@ function _taxonomy_edge_detach_subtree($vid, $tids) {
 function _taxonomy_edge_attach_subtree($vid, $tid, $parents) {
   // Build new parents
   db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
-  SELECT :vid, e2.tid, e.parent, e.distance + e2.distance + 1 AS distance
+  SELECT e.vid, e2.tid, e.parent, e.distance + e2.distance + 1 AS distance
   FROM {taxonomy_term_edge} e
   INNER JOIN {taxonomy_term_edge} e2 ON e.tid IN (:parents) AND e2.parent = :tid
   WHERE e.vid = :vid AND e2.vid = :vid
@@ -535,7 +535,7 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
     );
 
     db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
-      SELECT :vid AS vid, :tid AS tid, e.parent, e.distance + 1 AS distance
+      SELECT e.vid, :tid AS tid, e.parent, e.distance + 1 AS distance
       FROM {taxonomy_term_edge} e
       WHERE e.tid IN (:parents)
       AND e.vid = :vid
@@ -647,19 +647,6 @@ function _taxonomy_edge_generate_term_path_query($tid) {
       return "(SELECT GROUP_CONCAT(val, '    ') FROM (SELECT (tpd.weight + 1500) || tpd.name || '    ' || tpd.tid AS val FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC))";
     default:
   }
-}
-
-/**
- * Generate a (hopefully) unique big integer for this request.
- * Current time with ms + a random number.
- */
-function _taxonomy_edge_get_key() {
-  static $key;
-  if (!isset($key)) {
-    $key = (int)(microtime(TRUE) * 1000);
-    $key = ($key % 3600000) * 1000 + rand(0, 999);
-  }
-  return $key;
 }
 
 // ---------- PUBLIC HELPER FUNCTIONS ----------
@@ -783,7 +770,7 @@ function taxonomy_edge_get_top_tids($tid) {
  *   Top term ID.
  */
 function taxonomy_edge_get_top_tid($tid) {
-  return taxonomy_edge_get_top_tids(array($tid));
+  return reset(taxonomy_edge_get_top_tids(array($tid)));
 }
 
 // ---------- CORE OVERRIDES ----------
