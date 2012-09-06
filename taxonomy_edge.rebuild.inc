@@ -112,6 +112,7 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
 
   // Clear out edge data for vocabulary.
   taxonomy_edge_taxonomy_vocabulary_insert($vocabulary);
+  $total_rows = 1;
 
   $result = db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
     SELECT DISTINCT d.vid, h.tid, h.tid, 0
@@ -121,7 +122,7 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
     AND h.tid <> h.parent
     AND d.vid = :vid
   ", array(':vid' => $vid));
-  $total_rows = $result->rowCount();
+  $total_rows += $result->rowCount();
 
   $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
   $context['finished'] = 0.5;
