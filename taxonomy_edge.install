@@ -117,44 +117,64 @@ function taxonomy_edge_schema() {
 }
 
 /**
- * Update edge table with serial, vocabulary id and indexes
+ * Fixup schema version and broken upgrade paths
  */
-function taxonomy_edge_update_6101(&$sandbox) {
-  // We need to rebuild the data. Let's truncate before altering the table.
-  db_truncate('taxonomy_term_edge')->execute();
-
-  // Change schema.
-  db_drop_index('taxonomy_term_edge', 'idx_parent');
-  db_drop_primary_key('taxonomy_term_edge');
-
-  db_add_field('taxonomy_term_edge', 'eid', array(
-    'description' => 'Edge ID',
-    'type' => 'serial',
-    'unsigned' => TRUE,
-    'not null' => TRUE,
-  ), array('primary key' => array('eid')));
-  db_add_field('taxonomy_term_edge', 'vid', array(
-    'description' => 'Vocabulary ID',
-    'type' => 'int',
-    'unsigned' => TRUE,
-    'not null' => TRUE,
-    'default' => 0
-  ));
-
-  db_add_index('taxonomy_term_edge', 'idx_depth', array('vid', 'distance', 'parent'));
-  db_add_index('taxonomy_term_edge', 'idx_tree', array('parent', 'vid', 'distance'));
-
-  return t('Table schema updated and edge table cleared.');
-}
-
-/**
- * Add table for presorted trees.
- */
-function taxonomy_edge_update_6102(&$sandbox) {
+function taxonomy_edge_update_7101(&$sandbox) {
   if (!isset($sandbox['vocabularies'])) {
+    $schema_version = db_query("SELECT schema_version FROM {system} WHERE name = 'taxonomy_edge'")->fetchField();
+    if ($schema_version == '6102') {
+      return t('Nothing to do ... already up to date');
+    }
 
-    // Add order table
-    $schema = array(
+    $schema = array();
+    $schema['taxonomy_term_edge'] = array(
+      'description' => 'Stores edge list for taxonomies.',
+      'fields' => array(
+        'eid' => array(
+          'description' => 'Edge ID',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'vid' => array(
+          'description' => 'Vocabulary ID',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0
+        ),
+        'tid' => array(
+          'description' => 'Term ID',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0
+        ),
+        'parent' => array(
+          'description' => 'Parent Term ID',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0
+        ),
+        'distance' => array(
+          'description' => 'Distance to parent (depth)',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0
+        ),
+      ),
+      'primary key' => array('eid'),
+      'indexes' => array(
+        'idx_update' => array('vid', 'distance', 'parent'),
+        'idx_depth' => array('parent', 'distance', 'vid'),
+        'idx_term' => array('tid', 'distance'),
+        'idx_tree' => array('parent', 'vid', 'distance'),
+      ),
+    );
+
+    $schema['taxonomy_term_edge_order'] = array(
       'description' => 'Sequencing table for sorting taxonomies.',
       'fields' => array(
         'oid' => array(
@@ -190,11 +210,10 @@ function taxonomy_edge_update_6102(&$sandbox) {
       ),
     );
 
-    db_drop_index('taxonomy_term_edge', 'idx_depth');
-    db_add_index('taxonomy_term_edge', 'idx_update', array('vid', 'distance', 'parent'));
-    db_add_index('taxonomy_term_edge', 'idx_depth', array('parent', 'distance', 'vid'));
-
-    db_create_table('taxonomy_term_edge_order', $schema);
+    db_drop_table('taxonomy_term_edge');
+    db_drop_table('taxonomy_term_edge_order');
+    db_create_table('taxonomy_term_edge', $schema['taxonomy_term_edge']);
+    db_create_table('taxonomy_term_edge_order', $schema['taxonomy_term_edge_order']);
 
     // Initialize vocabularies to rebuild.
     $sandbox['vocabularies'] = array_values(taxonomy_get_vocabularies());
@@ -214,6 +233,9 @@ function taxonomy_edge_update_6102(&$sandbox) {
 
   // Process that vocabulary
   module_load_include('rebuild.inc', 'taxonomy_edge');
+  $sub_context = array();
+  taxonomy_edge_rebuild_edges($vocabulary->vid, $sub_context);
+  $sandbox['message'] = array_merge($sandbox['message'], $sub_context['results']);
   $sub_context = array();
   taxonomy_edge_rebuild_order($vocabulary->vid, $sub_context);
   $sandbox['message'] = array_merge($sandbox['message'], $sub_context['results']);
