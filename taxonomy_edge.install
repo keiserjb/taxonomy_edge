@@ -120,56 +120,31 @@ function taxonomy_edge_schema() {
  * Update edge table with serial, vocabulary id and indexes
  */
 function taxonomy_edge_update_6101(&$sandbox) {
-  if (!isset($sandbox['vocabularies'])) {
-    // We need to rebuild the data. Let's truncate before altering the table.
-    db_truncate('taxonomy_term_edge')->execute();
+  // We need to rebuild the data. Let's truncate before altering the table.
+  db_truncate('taxonomy_term_edge')->execute();
 
-    // Change schema.
-    db_drop_index('taxonomy_term_edge', 'idx_parent');
-    db_drop_primary_key('taxonomy_term_edge');
+  // Change schema.
+  db_drop_index('taxonomy_term_edge', 'idx_parent');
+  db_drop_primary_key('taxonomy_term_edge');
 
-    db_add_field('taxonomy_term_edge', 'eid', array(
-      'description' => 'Edge ID',
-      'type' => 'serial',
-      'unsigned' => TRUE,
-      'not null' => TRUE,
-    ), array('primary key' => array('eid')));
-    db_add_field('taxonomy_term_edge', 'vid', array(
-      'description' => 'Vocabulary ID',
-      'type' => 'int',
-      'unsigned' => TRUE,
-      'not null' => TRUE,
-      'default' => 0
-    ));
+  db_add_field('taxonomy_term_edge', 'eid', array(
+    'description' => 'Edge ID',
+    'type' => 'serial',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+  ), array('primary key' => array('eid')));
+  db_add_field('taxonomy_term_edge', 'vid', array(
+    'description' => 'Vocabulary ID',
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+    'default' => 0
+  ));
 
-    db_add_index('taxonomy_term_edge', 'idx_depth', array('vid', 'distance', 'parent'));
-    db_add_index('taxonomy_term_edge', 'idx_tree', array('parent', 'vid', 'distance'));
+  db_add_index('taxonomy_term_edge', 'idx_depth', array('vid', 'distance', 'parent'));
+  db_add_index('taxonomy_term_edge', 'idx_tree', array('parent', 'vid', 'distance'));
 
-    // Initialize vocabularies to rebuild.
-    $sandbox['vocabularies'] = array_values(taxonomy_get_vocabularies());
-    $sandbox['number_of_vocabularies'] = count($sandbox['vocabularies']);
-    $sandbox['current'] = 0;
-    $sandbox['#finished'] = 1 / ($sandbox['number_of_vocabularies'] + 1);
-    $sandbox['message'] = array();
-
-    return t('Table schema updated and edge table cleared.');
-  }
-
-  // Grab next vocabulary to be processed.
-  $vocabularies = $sandbox['vocabularies'];
-  $number_of_vocabularies = $sandbox['number_of_vocabularies'];
-  $current = &$sandbox['current'];
-  $vocabulary = $vocabularies[$current++];
-
-  // Process that vocabulary
-  module_load_include('rebuild.inc', 'taxonomy_edge');
-  $sub_context = array();
-  taxonomy_edge_rebuild_edges($vocabulary->vid, $sub_context);
-  $sandbox['message'] = array_merge($sandbox['message'], $sub_context['results']);
-
-  // Next step or finish.
-  $sandbox['#finished'] = (2 + $current) / ($number_of_vocabularies + 1);
-  return implode('<br/>', $sandbox['message']);
+  return t('Table schema updated and edge table cleared.');
 }
 
 /**
