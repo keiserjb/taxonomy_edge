@@ -784,7 +784,8 @@ function taxonomy_edge_get_top_tids($tid) {
  *   Top term ID.
  */
 function taxonomy_edge_get_top_tid($tid) {
-  return reset(taxonomy_edge_get_top_tids(array($tid)));
+  $tids = taxonomy_edge_get_top_tids(array($tid));
+  return reset($tids);
 }
 
 // ---------- CORE OVERRIDES ----------
