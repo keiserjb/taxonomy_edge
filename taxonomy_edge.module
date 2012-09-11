@@ -466,10 +466,10 @@ function _taxonomy_edge_delete_subtree($vid, $tids, $type = 0) {
       {taxonomy_term_edge} WHERE eid IN (
         SELECT e2.eid
         FROM {taxonomy_term_edge} e
-        INNER JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid
+        INNER JOIN {taxonomy_term_edge} e2 ON e2.tid = e.tid AND e2.vid = e.vid
         WHERE e.parent IN (:tids)
         $type
-        AND e.vid = :vid AND e2.vid = :vid
+        AND e.vid = :vid
       )",  array(':tids' => $tids, ':vid' => $vid));
       break;
   }
@@ -497,8 +497,8 @@ function _taxonomy_edge_attach_subtree($vid, $tid, $parents) {
   db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
   SELECT e.vid, e2.tid, e.parent, e.distance + e2.distance + 1 AS distance
   FROM {taxonomy_term_edge} e
-  INNER JOIN {taxonomy_term_edge} e2 ON e.tid IN (:parents) AND e2.parent = :tid
-  WHERE e.vid = :vid AND e2.vid = :vid
+  INNER JOIN {taxonomy_term_edge} e2 ON e.tid IN (:parents) AND e2.parent = :tid AND e2.vid = e.vid
+  WHERE e.vid = :vid
   ", array(':tid' => $tid, ':parents' => $parents, ':vid' => $vid));
   taxonomy_edge_invalidate_order($vid);
 }
@@ -532,9 +532,12 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
   if ($term->tid > 0) {
     $tx = db_transaction();
 
-    db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent) VALUES(:vid, :tid, :tid)",
-      array(':vid' => $term->vid, ':tid' => $term->tid)
-    );
+    db_insert('taxonomy_term_edge')
+      ->fields(array(
+        'vid' => $term->vid,
+        'tid' => $term->tid,
+        'parent' => $term->tid))
+      ->execute();
 
     db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
       SELECT e.vid, :tid AS tid, e.parent, e.distance + 1 AS distance
@@ -647,6 +650,15 @@ function _taxonomy_edge_generate_term_path_query($tid) {
       return "(SELECT GROUP_CONCAT(tpd.weight + 1500, tpd.name, '    ', tpd.tid ORDER BY tpe.distance DESC SEPARATOR '    ') FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid)";
     case 'sqlite':
       return "(SELECT GROUP_CONCAT(val, '    ') FROM (SELECT (tpd.weight + 1500) || tpd.name || '    ' || tpd.tid AS val FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC))";
+    case 'sqlsrv':
+          return "(SELECT RTRIM((
+                     SELECT CAST(tpd.weight + 1500 as nvarchar) + tpd.name + '    ' + CAST(tpd.tid as nvarchar) + '    '
+                     FROM taxonomy_term_edge tpe
+                     JOIN taxonomy_term_data tpd ON tpd.tid = tpe.parent
+                     WHERE tpe.tid = $tid
+                     ORDER BY tpe.distance DESC
+                     FOR XML PATH ('')))
+                  )";
     default:
   }
 }

@@ -188,7 +188,7 @@ function taxonomy_edge_rebuild_order($vid, &$context) {
   db_query("DELETE FROM {taxonomy_term_edge_order} WHERE vid = :vid", array(':vid' => $vid));
 
   $total_rows = db_query("INSERT INTO {taxonomy_term_edge_order} (vid, parent, eid)
-    SELECT :vid, op.parent, op.eid
+    SELECT op.vid, op.parent, op.eid
     FROM {taxonomy_term_edge} op
     WHERE op.vid = :vid
     ORDER BY " . _taxonomy_edge_generate_term_path_query('op.tid')
