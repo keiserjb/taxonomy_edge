@@ -129,7 +129,7 @@ function taxonomy_edge_menu() {
 function taxonomy_edge_modules_enabled($modules) {
   if (in_array('taxonomy_edge', $modules)) {
     // Since we're just enabling the module, it should be safe to truncate.
-    // Clearing out the tables will make the rebuild faster, and we're rebuild
+    // Clearing out the tables will make the rebuild faster, and we're rebuilding
     // everything anyways.
     db_truncate('taxonomy_term_edge')->execute();
     db_truncate('taxonomy_term_edge_order')->execute();
