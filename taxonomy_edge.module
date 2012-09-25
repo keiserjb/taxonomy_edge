@@ -653,8 +653,8 @@ function _taxonomy_edge_generate_term_path_query($tid) {
     case 'sqlsrv':
           return "(SELECT RTRIM((
                      SELECT CAST(tpd.weight + 1500 as nvarchar) + tpd.name + '    ' + CAST(tpd.tid as nvarchar) + '    '
-                     FROM taxonomy_term_edge tpe
-                     JOIN taxonomy_term_data tpd ON tpd.tid = tpe.parent
+                     FROM {taxonomy_term_edge} tpe
+                     JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent
                      WHERE tpe.tid = $tid
                      ORDER BY tpe.distance DESC
                      FOR XML PATH ('')))
