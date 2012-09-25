@@ -85,10 +85,13 @@ Nested set (http://en.wikipedia.org/wiki/Nested_set_model):
    - Fast retrieval of sorted tree.
  - Disadvantages:
    - Complex.
-   - Can be heavy on insert/update.
+   - Can be heavy on insert/update (can be mitigated with gaps, but increases complexity).
 
 Materialized path (http://www.dba-oracle.com/t_sql_patterns_trees.htm):
  - Advantages
    - Simple to understand.
  - Disadvantages:
    - Can be heavy on select/insert/update due to string compare.
+   - Requires multiple queries for proper use of indexes on subtree selection.
+   - Depth limit (due to index size limitation).
+
