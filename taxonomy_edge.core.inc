@@ -229,7 +229,14 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
   $clean_tree = array();
   foreach ($tree as $idx => &$term) {
     if ($load_entities) {
+      // Store values depth and parents, because the entity which overwrites
+      // does not carry these.
+      $t_depth = $term->depth; 
+      $t_parents = $term->parents;
       $term = $term_entities[$term->tid];
+      // Re-add depth and parents to the term (entity).
+      $term->depth = $t_depth;
+      $term->parents = $t_parents;
     }
     if (!$max_depth || $term->depth < $max_depth) {
       $clean_tree[] = $term;
