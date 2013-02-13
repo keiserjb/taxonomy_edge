@@ -22,7 +22,6 @@ function views_taxonomy_edge_views_data() {
       'left_field' => 'tid',
       'field' => 'tid',
       'type' => 'INNER',
-      'extra' => '{taxonomy_term_edge}.vid = {taxonomy_vocabulary}.vid',
       'handler' => 'views_join_term_edge',
     ),
     'taxonomy_vocabulary' => array(
