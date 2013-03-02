@@ -11,7 +11,7 @@ class views_join_term_edge extends views_join {
     // If it's blank we set it to the root of the tree.
     foreach ($view_query->where as $data) {
       foreach ($data['conditions'] as $condition) {
-        if ($condition['field'] == $table['alias'] . '.parent') {
+        if (preg_match('/^' . $table['alias'] . '.parent($|\s*=)/', $condition['field'])) {
           if ($condition['value'] == '') {
             $condition['value'] = 0;
           }
