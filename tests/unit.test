@@ -6,6 +6,7 @@
 class TaxonomyEdgeTreeUnitTestCase extends DrupalUnitTestCase {
   function setUp() {
     parent::setUp(array('taxonomy_edge'));
+    module_load_include('module', 'taxonomy_edge');
   }
 
   public static function getInfo() {
