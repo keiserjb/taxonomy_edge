@@ -634,25 +634,61 @@ function _taxonomy_edge_unify_parents($parents) {
 /**
  * Generate query for ordering by dynamically compiled path
  *
- * @param $tid
+ * @param string $tid
  *   Term ID to generate dynamic path from.
+ * $param string $sep (optional)
+ *   Separator to use in path
  * @return
  *   String containing query.
  */
-function _taxonomy_edge_generate_term_path_query($tid) {
+function _taxonomy_edge_generate_term_path_query($tid, $sep = '    ') {
   $args = func_get_args();
   $db_type = Database::getConnection()->databaseType();
   switch ($db_type) {
     case 'pgsql':
-      return "(SELECT array_to_string(array_agg(((tpx.weight + 1500) || tpx.name || '    ' || tpx.tid)), '    ') FROM (SELECT tpd.* FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC) tpx)";
+      return "(SELECT array_to_string(array_agg(((tpx.weight + 1500) || tpx.name || '$sep' || tpx.tid)), '$sep') FROM (SELECT tpd.* FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC) tpx)";
     case 'mysql':
     case 'mysqli':
-      return "(SELECT GROUP_CONCAT(tpd.weight + 1500, tpd.name, '    ', tpd.tid ORDER BY tpe.distance DESC SEPARATOR '    ') FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid)";
+      return "(SELECT GROUP_CONCAT(tpd.weight + 1500, tpd.name, '$sep', tpd.tid ORDER BY tpe.distance DESC SEPARATOR '$sep') FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid)";
     case 'sqlite':
-      return "(SELECT GROUP_CONCAT(val, '    ') FROM (SELECT (tpd.weight + 1500) || tpd.name || '    ' || tpd.tid AS val FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC))";
+      return "(SELECT GROUP_CONCAT(val, '$sep') FROM (SELECT (tpd.weight + 1500) || tpd.name || '$sep' || tpd.tid AS val FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC))";
     case 'sqlsrv':
           return "(SELECT RTRIM((
-                     SELECT CAST(tpd.weight + 1500 as nvarchar) + tpd.name + '    ' + CAST(tpd.tid as nvarchar) + '    '
+                     SELECT CAST(tpd.weight + 1500 as nvarchar) + tpd.name + '$sep' + CAST(tpd.tid as nvarchar) + '$sep'
+                     FROM {taxonomy_term_edge} tpe
+                     JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent
+                     WHERE tpe.tid = $tid
+                     ORDER BY tpe.distance DESC
+                     FOR XML PATH ('')))
+                  )";
+    default:
+  }
+}
+
+/**
+ * Generate query for ordering by dynamically compiled pretty path
+ *
+ * @param string $tid
+ *   Term ID to generate dynamic path from.
+ * $param string $sep (optional)
+ *   Separator to use in path
+ * @return
+ *   String containing query.
+ */
+function _taxonomy_edge_generate_term_pretty_path_query($tid, $sep = ' > ') {
+  $args = func_get_args();
+  $db_type = Database::getConnection()->databaseType();
+  switch ($db_type) {
+    case 'pgsql':
+      return "(SELECT array_to_string(array_agg((tpx.name)), '$sep') FROM (SELECT tpd.* FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC) tpx)";
+    case 'mysql':
+    case 'mysqli':
+      return "(SELECT GROUP_CONCAT(tpd.name, ' (', tpd.tid, ')' ORDER BY tpe.distance DESC SEPARATOR '$sep') FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid)";
+    case 'sqlite':
+      return "(SELECT GROUP_CONCAT(val, '$sep') FROM (SELECT tpd.name AS val FROM {taxonomy_term_edge} tpe INNER JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent WHERE tpe.tid = $tid ORDER BY tpe.distance DESC))";
+    case 'sqlsrv':
+          return "(SELECT RTRIM((
+                     SELECT tpd.name + '$sep'
                      FROM {taxonomy_term_edge} tpe
                      JOIN {taxonomy_term_data} tpd ON tpd.tid = tpe.parent
                      WHERE tpe.tid = $tid
