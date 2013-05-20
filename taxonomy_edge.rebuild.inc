@@ -155,10 +155,9 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
 
   $context['success'] = TRUE;
   $context['finished'] = 1;
-  $context['message'] = t('%name rebuilt: %rows processed with depth %depth in %time seconds',
+  $context['results'][] = t('%name rebuilt: %rows processed with depth %depth in %time seconds',
       array('%rows' => $total_rows, '%depth' => $depth, '%time' => sprintf("%.03f", microtime(TRUE) - $time), '%name' => $vocabulary->name)
   );
-  $context['results'][] = $context['message'];
 
   return $total_rows;
 }
@@ -196,10 +195,9 @@ function taxonomy_edge_rebuild_order($vid, &$context) {
 
   $context['success'] = TRUE;
   $context['finished'] = 1;
-  $context['message'] = t('%name sorted: %rows edges in %time seconds',
+  $context['results'][] = t('%name sorted: %rows edges in %time seconds',
       array('%rows' => $total_rows, '%time' => sprintf("%.03f", microtime(TRUE) - $time), '%name' => $vocabulary->name)
   );
-  $context['results'][] = $context['message'];
 
   db_insert('taxonomy_term_edge_order')
     ->fields(array('vid' => -$vid))
