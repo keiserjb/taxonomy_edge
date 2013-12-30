@@ -39,6 +39,11 @@ define('TAXONOMY_EDGE_STATIC_CACHING', FALSE);
  */
 define('TAXONOMY_EDGE_OPTIMIZED_GET_TREE', TRUE);
 
+/**
+ * Override term pages.
+ */
+define('TAXONOMY_EDGE_OVERRIDE_TERM_PAGES', TRUE);
+
 // ---------- HOOKS ----------
 
 /**
@@ -81,26 +86,6 @@ function taxonomy_edge_permission() {
 function taxonomy_edge_menu() {
   $items = array();
 
-  // Bring /level and /all back into taxonomy pages and feeds.
-  $items['taxonomy/term/%taxonomy_term'] = array(
-    'title' => 'Taxonomy term',
-    'title callback' => 'taxonomy_term_title',
-    'title arguments' => array(2),
-    'page callback' => 'taxonomy_edge_term_page',
-    'page arguments' => array(2, 3),
-    'access arguments' => array('access content'),
-    'file' => 'taxonomy_edge.pages.inc',
-  );
-  $items['taxonomy/term/%taxonomy_term/%/feed'] = array(
-    'title' => 'Taxonomy term',
-    'title callback' => 'taxonomy_term_title',
-    'title arguments' => array(2),
-    'page callback' => 'taxonomy_edge_term_feed',
-    'page arguments' => array(2, 3),
-    'access arguments' => array('access content'),
-    'file' => 'taxonomy_edge.pages.inc',
-  );
-
   // Settings page.
   $items['admin/structure/taxonomy/edge'] = array(
     'title'            => 'Edge',
@@ -122,6 +107,35 @@ function taxonomy_edge_menu() {
   );
 
   return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function taxonomy_edge_menu_alter(&$items) {
+  // Bring /level and /all back into taxonomy pages and feeds.
+  if (variable_get('taxonomy_edge_override_term_pages')) {
+    $items['taxonomy/term/%taxonomy_term'] = array(
+      'title' => 'Taxonomy term',
+      'title callback' => 'taxonomy_term_title',
+      'title arguments' => array(2),
+      'page callback' => 'taxonomy_edge_term_page',
+      'page arguments' => array(2, 3),
+      'access arguments' => array('access content'),
+      'module' => 'taxonomy_edge',
+      'file' => 'taxonomy_edge.pages.inc',
+    );
+    $items['taxonomy/term/%taxonomy_term/%/feed'] = array(
+      'title' => 'Taxonomy term',
+      'title callback' => 'taxonomy_term_title',
+      'title arguments' => array(2),
+      'page callback' => 'taxonomy_edge_term_feed',
+      'page arguments' => array(2, 3),
+      'access arguments' => array('access content'),
+      'module' => 'taxonomy_edge',
+      'file' => 'taxonomy_edge.pages.inc',
+    );
+  }
 }
 
 /**

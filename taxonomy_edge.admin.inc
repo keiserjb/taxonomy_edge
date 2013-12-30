@@ -37,6 +37,13 @@ function taxonomy_edge_settings_form() {
     '#type' => 'checkbox',
     '#default_value' => variable_get('taxonomy_edge_optimized_get_tree', TAXONOMY_EDGE_OPTIMIZED_GET_TREE),
   );
+  $form['taxonomy_edge_override_term_pages'] = array(
+    '#title' => t('Override term pages'),
+    '#description' => t('Override taxonomy/term/%term pages (and feed pages also) supporting the depth modifier argument.'),
+    '#type' => 'checkbox',
+    '#default_value' => variable_get('taxonomy_edge_override_term_pages', TAXONOMY_EDGE_OVERRIDE_TERM_PAGES),
+  );
+
 
   $form['rebuild'] = array(
     '#type' => 'fieldset',
@@ -53,7 +60,30 @@ function taxonomy_edge_settings_form() {
   );
 
   $form = system_settings_form($form);
+  $form['#submit'][] = 'taxonomy_edge_system_settings_form_submit_custom';
   return $form;
+}
+
+/**
+ * Submit handler for rebuild menu after saving.
+ *
+ * Changing the override term pages setting requires rebuild of menu.
+ * Since we have no proper atomic way of detecting whether or not the
+ * setting has actually changed (theoretical race-condition), we always
+ * rebuild when saving these settings.
+ */
+function taxonomy_edge_system_settings_form_submit_custom($form, &$form_state) {
+  // If a rebuild is already in progress, chances are that our new settings
+  // is not part of the rebuild. We therefore wait for the rebuild to finish
+  // and then rebuild again.
+  if (!lock_acquire('menu_rebuild')) {
+    lock_wait('menu_rebuild');
+    if (!lock_acquire('menu_rebuild')) {
+      drupal_set_message(t("Could not rebuild menu. Please rebuild menu / clear cache to make the term pages override take effect."), 'error');
+      return;
+    }
+  }
+  menu_rebuild();
 }
 
 /**
