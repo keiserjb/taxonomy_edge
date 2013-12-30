@@ -1,12 +1,11 @@
 <?php
 /**
  * @file
- *
  * This file contains the functions for reuilding various tables.
  */
 
 /**
- * Start batch job for rebuild of edges
+ * Start batch job for rebuild of edges.
  */
 function taxonomy_edge_rebuild_edges_batch($vids) {
   $batch = array(
@@ -22,7 +21,7 @@ function taxonomy_edge_rebuild_edges_batch($vids) {
 }
 
 /**
- * Start batch job for rebuild of order
+ * Start batch job for rebuild of order.
  */
 function taxonomy_edge_rebuild_order_batch($vids) {
   $batch = array(
@@ -38,7 +37,7 @@ function taxonomy_edge_rebuild_order_batch($vids) {
 }
 
 /**
- * Start batch job for rebuild of edges and order
+ * Start batch job for rebuild of edges and order.
  */
 function taxonomy_edge_rebuild_all_batch($vids) {
   $batch = array(
@@ -56,10 +55,6 @@ function taxonomy_edge_rebuild_all_batch($vids) {
 
 /**
  * Finished function for rebuild tree batch operation.
- *
- * @param type $success
- * @param type $result
- * @param type $operations
  */
 function taxonomy_edge_rebuild_finished($success, $results, $operations) {
   if ($success) {
@@ -92,7 +87,7 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
     return;
   }
 
-  // Acquire lock to avoid conflicts with queue
+  // Acquire lock to avoid conflicts with queue.
   if (!lock_acquire('taxonomy_edge_rebuild_edges_' . $vid)) {
     $context['success'] = FALSE;
     $context['results'][] = t('Could not acquire lock!');
@@ -107,7 +102,7 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
   $queue->deleteQueue();
 
   // Please use a proper isolation level, so that transaction provides us with a
-  // snapshot
+  // snapshot.
   $tx = db_transaction();
 
   // Clear out edge data for vocabulary.
@@ -173,7 +168,7 @@ function taxonomy_edge_rebuild_order($vid, &$context) {
     return;
   }
 
-  // Acquire lock
+  // Acquire lock.
   if (!lock_acquire('taxonomy_edge_rebuild_edges_' . $vid)) {
     $context['success'] = FALSE;
     $context['message'] = t('Could not acquire lock!');
@@ -190,8 +185,8 @@ function taxonomy_edge_rebuild_order($vid, &$context) {
     SELECT op.vid, op.parent, op.eid
     FROM {taxonomy_term_edge} op
     WHERE op.vid = :vid
-    ORDER BY " . _taxonomy_edge_generate_term_path_query('op.tid')
-  , array(':vid' => $vid))->rowCount();
+    ORDER BY " . _taxonomy_edge_generate_term_path_query('op.tid'),
+    array(':vid' => $vid))->rowCount();
 
   $context['success'] = TRUE;
   $context['finished'] = 1;

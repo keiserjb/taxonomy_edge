@@ -1,8 +1,8 @@
 <?php
-
 /**
  * @file
  */
+
 class TaxonomyEdgeTreeUnitTestCase extends DrupalUnitTestCase {
   function setUp() {
     parent::setUp(array('taxonomy_edge'));

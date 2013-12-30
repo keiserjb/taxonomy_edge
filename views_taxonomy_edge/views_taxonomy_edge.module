@@ -1,7 +1,6 @@
 <?php
 /**
  * @file
- *
  * Integration with Views using Taxonomy Edge.
  *
  * Overrides the depth arguments and uses Taxonomy Edge for these.
@@ -9,7 +8,7 @@
  */
 
 /**
- Implements hook_views_api().
+ * Implements hook_views_api().
  */
 function views_taxonomy_edge_views_api() {
   return array(
@@ -21,7 +20,7 @@ function views_taxonomy_edge_views_api() {
  * Implements hook_views_data_alter().
  */
 function views_taxonomy_edge_views_data_alter(&$data) {
-  // Override term_node logic
+  // Override term_node logic.
   $data['node']['term_node_tid_depth'] = array(
     'help' => t('Display content if it has the selected taxonomy terms, or children of the selected terms. Due to additional complexity, this has fewer options than the versions without depth.'),
     'real field' => 'nid',
@@ -44,12 +43,26 @@ function views_taxonomy_edge_views_data_alter(&$data) {
     ),
   );
 
-  // Tell taxonomy_term_data how to join with the edge tables
+  // Tell taxonomy_term_data how to join with the edge tables.
   $data['taxonomy_term_data']['table']['join']['taxonomy_term_edge'] = array(
     'field' => 'tid',
     'left_field' => 'tid',
     'type' => 'INNER',
     'handler' => 'views_join_term_edge',
+  );
+
+  $data['taxonomy_term_data']['children'] = array(
+    'title' => t('Term Children'),
+    'help' => t('The children taxonomy terms'),
+    'real field' => 'tid',
+    'relationship' => array(
+      'base' => 'taxonomy_term_edge',
+      'base field' => 'parent',
+      'handler' => 'views_handler_relationship',
+      'label' => t('Child terms'),
+      'title' => t('Child terms'),
+      'help' => t('The children of the current term'),
+    ),
   );
 
   // Hierarchy sort handler.

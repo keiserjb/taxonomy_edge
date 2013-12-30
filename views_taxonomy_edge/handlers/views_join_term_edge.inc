@@ -1,8 +1,13 @@
 <?php
 /**
  * @file
+ * Views join handler for taxonomy edge.
  */
+
 class views_join_term_edge extends views_join {
+  /**
+   * Override build_join.
+   */
   function build_join($select_query, $table, $view_query) {
     $this->extra = $table['alias'] . '.vid = ' . $this->left_table . '.vid';
     $found = FALSE;
@@ -16,6 +21,25 @@ class views_join_term_edge extends views_join {
             $condition['value'] = 0;
           }
           else {
+            $found = TRUE;
+            break;
+          }
+        }
+      }
+    }
+
+    // If there wasn't any where conditions on the parent, go through all joins
+    // to check if there is a join on the parent.
+    if (!$found) {
+      foreach ($view_query->table_queue as $queue_table) {
+        if ($queue_table['table'] == 'taxonomy_term_data') {
+          if (!empty($queue_table['join']) && $queue_table['join']->left_field == 'parent') {
+            $found = TRUE;
+            break;
+          }
+        }
+        elseif ($queue_table['table'] == 'taxonomy_term_edge') {
+          if (!empty($queue_table['join']) && $queue_table['join']->field == 'parent') {
             $found = TRUE;
             break;
           }

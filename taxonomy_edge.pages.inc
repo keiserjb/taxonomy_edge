@@ -1,14 +1,16 @@
 <?php
 /**
  * @file
+ * Page callbacks for Taxonomy Edge.
  */
 
 /**
  * Menu callback; displays all nodes associated with a term.
  *
- * @param $term
+ * @param object $term
  *   The taxonomy term.
- * @return
+ *
+ * @return string
  *   The page content.
  */
 function taxonomy_edge_term_page($term, $depth = '0') {
@@ -68,7 +70,7 @@ function taxonomy_edge_term_page($term, $depth = '0') {
 /**
  * Generate the content feed for a taxonomy term.
  *
- * @param $term
+ * @param object $term
  *   The taxonomy term.
  */
 function taxonomy_edge_term_feed($term, $depth = '0') {
@@ -89,4 +91,3 @@ function taxonomy_edge_term_feed($term, $depth = '0') {
 
   node_feed($nids, $channel);
 }
-

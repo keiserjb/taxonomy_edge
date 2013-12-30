@@ -1,12 +1,12 @@
 <?php
 /**
  * @file
- *
  * This file contains the core override functions
  */
 
 /**
  * Reimplementation of taxonomy_get_tree().
+ *
  * Limit db fetch to only specified parent.
  * @see taxonomy_get_tree()
  */
@@ -20,8 +20,8 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
 
   if ($static_cache) {
     $children = &drupal_static('taxonomy_get_tree', array());
-    $parents = &drupal_static('taxonomy_get_tree' . ':parents', array());
-    $terms = &drupal_static('taxonomy_get_tree' . ':terms', array());
+    $parents = &drupal_static('taxonomy_get_tree:parents', array());
+    $terms = &drupal_static('taxonomy_get_tree:terms', array());
   }
   else {
     $children = $parents = $terms = array();
@@ -130,13 +130,14 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
 
 /**
  * Reimplementation of taxonomy_get_tree().
+ *
  * Limit db fetch to only specified parent AND use presorting.
  * @see taxonomy_get_tree()
  */
 function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE) {
   $vocabulary = taxonomy_vocabulary_load($vid);
 
-  // Optimized version does not work with multiple parents
+  // Optimized version does not work with multiple parents.
   if ($vocabulary->hierarchy == 2) {
     return taxonomy_edge_get_tree_generic($vid, $parent, $max_depth, $load_entities);
   }
@@ -148,11 +149,11 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
     return taxonomy_edge_get_tree_generic($vid, $parent, $max_depth, $load_entities);
   }
 
-  // Setup static cache if applicable
+  // Setup static cache if applicable.
   $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
   $cache = &drupal_static('taxonomy_edge_tree_cache', array());
 
-  // Return cache if present
+  // Return cache if present.
   if ($static_cache && isset($cache[$parent])) {
     $tree = array();
     for ($i = $cache[$parent]['offset']; $i < $cache[$parent]['offset'] + $cache[$parent]['count']; $i++) {
@@ -168,7 +169,7 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
     return $tree;
   }
 
-  // No cache, let's fetch from db
+  // No cache, let's fetch from db.
   $query = db_select('taxonomy_term_edge', 'e');
   $query->join('taxonomy_term_data', 'd', 'd.tid = e.tid');
 
@@ -227,11 +228,11 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
 
   // Original taxonomy_get_tree() has an incremental index. Let's do this as well in a memory efficient way.
   $clean_tree = array();
-  foreach ($tree as $idx => &$term) {
+  foreach ($tree as &$term) {
     if ($load_entities) {
       // Store values depth and parents, because the entity which overwrites
       // does not carry these.
-      $t_depth = $term->depth; 
+      $t_depth = $term->depth;
       $t_parents = $term->parents;
       $term = $term_entities[$term->tid];
       // Re-add depth and parents to the term (entity).

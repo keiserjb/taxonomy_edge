@@ -1,8 +1,9 @@
 <?php
-
 /**
  * @file
+ * Web test cases for Taxonomy Edge.
  */
+
 class TaxonomyEdgeTreeTestCase extends DrupalWebTestCase {
   private $terms = array();
   private $vocabulary;

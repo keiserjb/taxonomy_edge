@@ -1,7 +1,7 @@
 <?php
 /**
  * @file
- * Drush commands for Taxonomy Nested Intervals
+ * Drush commands for Taxonomy Edge.
  */
 
 /**
@@ -40,11 +40,23 @@ function taxonomy_edge_drush_command() {
  */
 function taxonomy_edge_drush_help($section) {
   switch ($section) {
-    case 'drush:rebuild-intervals':
-      return dt("This command will rebuild the nested intervals for a vocabulary.");
+    case 'drush:rebuild-edges':
+      return dt("This command will rebuild the edges for a vocabulary.");
+
+    case 'drush:rebuild-order':
+      return dt("This command will rebuild the order for a vocabulary.");
   }
 }
 
+/**
+ * Get vocabulary id by machine name.
+ *
+ * @param string $name
+ *   The vocabulary machine name.
+ *
+ * @return integer
+ *   The vocabulary ID, FALSE if not found.
+ */
 function _drush_taxonomy_edge_get_vid($name) {
   $vocabulary = taxonomy_vocabulary_machine_name_load($name);
   if (!$vocabulary) {
@@ -55,7 +67,7 @@ function _drush_taxonomy_edge_get_vid($name) {
 }
 
 /**
- * Rebuild intervals
+ * Rebuild edges.
  */
 function drush_taxonomy_edge_rebuild_edges($name) {
   $vid = _drush_taxonomy_edge_get_vid($name);
@@ -73,7 +85,7 @@ function drush_taxonomy_edge_rebuild_edges($name) {
 }
 
 /**
- * Rebuild intervals
+ * Rebuild order.
  */
 function drush_taxonomy_edge_rebuild_order($name) {
   $vid = _drush_taxonomy_edge_get_vid($name);
@@ -88,4 +100,3 @@ function drush_taxonomy_edge_rebuild_order($name) {
   $batch['progressive'] = FALSE;
   drush_backend_batch_process();
 }
-

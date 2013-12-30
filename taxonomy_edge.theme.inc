@@ -1,9 +1,12 @@
 <?php
 /**
  * @file
+ * Theme functions for Taxonomy Edge.
  */
 
 /**
+ * Overview vocabularies theme function.
+ *
  * Copy of theme_taxonomy_overview_vocabularies, but with the addition of a
  * column, and an increase in colspan.
  */

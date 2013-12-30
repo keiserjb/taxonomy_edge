@@ -1,13 +1,13 @@
 <?php
 /**
  * @file
- *
  * This file is a copy/override of the default views taxonomy argument handler.
  *
  * Argument handler for modifying depth for a previous term using Taxonomy Edge.
  *
  * @see views_handler_argument_term_node_tid_depth_modifier.inc
  */
+
 class views_handler_argument_term_edge_node_tid_depth_modifier extends views_handler_argument_term_node_tid_depth_modifier {
   function pre_query() {
     // We don't know our argument yet, but it's based upon our position:
@@ -16,7 +16,7 @@ class views_handler_argument_term_edge_node_tid_depth_modifier extends views_han
       return;
     }
 
-    // figure out which argument preceded us.
+    // Figure out which argument preceded us.
     $keys = array_reverse(array_keys($this->view->argument));
     $skip = TRUE;
     foreach ($keys as $key) {

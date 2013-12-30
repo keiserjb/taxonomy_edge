@@ -1,7 +1,6 @@
 <?php
 /**
  * @file
- *
  * This file is a copy/override of the default views taxonomy argument handler.
  *
  * Argument handler for taxonomy terms with depth using Taxonomy Edge.

@@ -1,7 +1,6 @@
 <?php
 /**
  * @file
- *
  * Integration with Views using Taxonomy Edge.
  *
  * Add extra views capabilities for Taxonomy Edge
@@ -13,10 +12,10 @@
 function views_taxonomy_edge_views_data() {
   $data = array();
 
-  // Taxonomy Edges
+  // Taxonomy Edges.
   $data['taxonomy_term_edge']['table']['group']  = t('Taxonomy edge');
 
-  // Joins for this table
+  // Joins for this table.
   $data['taxonomy_term_edge']['table']['join'] = array(
     'taxonomy_term_data' => array(
       'left_field' => 'tid',
@@ -31,7 +30,7 @@ function views_taxonomy_edge_views_data() {
     ),
   );
 
-  // Columns
+  // Columns.
   $data['taxonomy_term_edge']['vid'] = array(
     'title' => t('Vocabulary ID'), // The item it appears as on the UI,
     'help' => t('The taxonomy vocabulary ID'),
@@ -63,6 +62,14 @@ function views_taxonomy_edge_views_data() {
     ),
     'sort' => array(
       'handler' => 'views_handler_sort',
+    ),
+    'relationship' => array(
+      'base' => 'taxonomy_term_data',
+      'base field' => 'tid',
+      'handler' => 'views_handler_relationship',
+      'label' => t('Parent terms'),
+      'title' => t('Parent terms'),
+      'help' => t('The parents of the current term'),
     ),
   );
 

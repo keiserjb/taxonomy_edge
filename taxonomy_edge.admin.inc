@@ -1,12 +1,11 @@
 <?php
 /**
  * @file
- *
  * Pages for taxonomy edge settings and more.
  */
 
 /**
- * Form build for the settings form
+ * Form build for the settings form.
  *
  * @see taxonomy_edge_rebuild_submit()
  * @ingroup forms
@@ -58,7 +57,7 @@ function taxonomy_edge_settings_form() {
 }
 
 /**
- * Confirmation for rebuilding trees
+ * Confirmation for rebuilding trees.
  */
 function taxonomy_edge_rebuild_page_confirm($form, &$form_state, $type, $vocabulary) {
   $form = array();
@@ -114,10 +113,12 @@ function taxonomy_edge_rebuild_page_confirm_submit($form, &$form_state) {
   switch ($form_state['values']['type']) {
     case 'edges':
       return taxonomy_edge_rebuild_edges_batch($vids);
+
     case 'order':
       return taxonomy_edge_rebuild_order_batch($vids);
+
     case 'all':
       return taxonomy_edge_rebuild_all_batch($vids);
+
   }
 }
-

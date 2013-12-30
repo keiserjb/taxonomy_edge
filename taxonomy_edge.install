@@ -1,7 +1,6 @@
 <?php
 /**
  * @file
- *
  * Installation file for Taxonomy Edge
  */
 
@@ -9,13 +8,14 @@
  * Implements hook_install().
  */
 function taxonomy_edge_install() {
+  $t = get_t();
   _taxonomy_edge_install();
-  drupal_set_message(st('Taxonomy Edge is now installed. Add the provided patch to the core module Taxonomy module for better performance.'));
-  drupal_set_message(st('Taxonomy Edge settings are available under !link',
-    array('!link' => l(st('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy/edge'))
+  drupal_set_message($t('Taxonomy Edge is now installed. Add the provided patch to the core module Taxonomy module for better performance.'));
+  drupal_set_message($t('Taxonomy Edge settings are available under !link',
+    array('!link' => l($t('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy/edge'))
   ));
-  drupal_set_message(st('Remember to build trees: !link',
-    array('!link' => l(st('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy'))
+  drupal_set_message($t('Remember to build trees: !link',
+    array('!link' => l($t('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy'))
   ));
 }
 
@@ -117,7 +117,7 @@ function taxonomy_edge_schema() {
 }
 
 /**
- * Fixup schema version and broken upgrade paths
+ * Fixup schema version and broken upgrade paths.
  */
 function taxonomy_edge_update_7101(&$sandbox) {
   if (!isset($sandbox['vocabularies'])) {
@@ -231,7 +231,7 @@ function taxonomy_edge_update_7101(&$sandbox) {
   $current = &$sandbox['current'];
   $vocabulary = $vocabularies[$current++];
 
-  // Process that vocabulary
+  // Process that vocabulary.
   module_load_include('rebuild.inc', 'taxonomy_edge');
   $sub_context = array();
   taxonomy_edge_rebuild_edges($vocabulary->vid, $sub_context);
