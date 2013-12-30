@@ -9,7 +9,7 @@
  */
 function taxonomy_edge_install() {
   $t = get_t();
-  _taxonomy_edge_install();
+  _taxonomy_edge_add_new_indexes(TRUE);
   drupal_set_message($t('Taxonomy Edge is now installed. Add the provided patch to the core module Taxonomy module for better performance.'));
   drupal_set_message($t('Taxonomy Edge settings are available under !link',
     array('!link' => l($t('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy/edge'))
@@ -23,7 +23,6 @@ function taxonomy_edge_install() {
  * Implements hook_uninstall().
  */
 function taxonomy_edge_uninstall() {
-  _taxonomy_edge_uninstall();
   drupal_set_message(st('Taxonomy Edge is now uninstalled. You may remove the provided patch to the core module Taxonomy module if applicable.'));
 }
 
@@ -116,6 +115,16 @@ function taxonomy_edge_schema() {
   return $schema;
 }
 
+/**
+ * Implements hook_schema_alter().
+ *
+ * Add extra index to {node} and {taxonomy_index} tables.
+ */
+function taxonomy_edge_schema_alter(&$schema) {
+  $schema['node']['indexes']['idx_taxonomy_edge'] = array('sticky', 'created', 'nid');
+  $schema['taxonomy_index']['indexes']['nid'] = array('nid', 'tid');
+  $schema['taxonomy_index']['indexes']['idx_taxonomy_edge'] = array('tid', 'nid');
+}
 /**
  * Fixup schema version and broken upgrade paths.
  */
@@ -246,15 +255,27 @@ function taxonomy_edge_update_7101(&$sandbox) {
 }
 
 /**
- * Implements hook_install().
+ * Update and add indexes.
  */
-function _taxonomy_edge_install() {
-  db_add_index('node', 'idx_taxonomy_edge', array('sticky', 'created', 'nid'));
+function taxonomy_edge_update_7102() {
+  _taxonomy_edge_add_new_indexes(array('taxonomy_index:nid'));
 }
 
 /**
- * Implements hook_uninstall().
+ * Add extra indexes to tables.
  */
-function _taxonomy_edge_uninstall() {
-  db_drop_index('node', 'idx_taxonomy_edge');
+function _taxonomy_edge_add_new_indexes($force = FALSE) {
+  $schema = array();
+  taxonomy_edge_schema_alter($schema);
+  foreach ($schema as $table => $table_def) {
+    foreach ($table_def['indexes'] as $index_name => $fields) {
+      if (!db_index_exists($table, $index_name)) {
+        db_add_index($table, $index_name, $fields);
+      }
+      elseif ($force === TRUE || (is_array($force) && in_array("$table:$index_name", $force))) {
+        db_drop_index($table, $index_name);
+        db_add_index($table, $index_name, $fields);
+      }
+    }
+  }
 }

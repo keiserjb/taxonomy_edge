@@ -309,6 +309,52 @@ sub3
     $this->assertTRUE($match, $message);
   }
   
+  function testNodes() {
+    $time = time();
+    $tids = array(
+      array($this->terms['test1']->tid, $this->terms['test5']->tid),
+      array($this->terms['test2']->tid, $this->terms['test5']->tid),
+      array($this->terms['test3']->tid, $this->terms['test5']->tid),
+      array($this->terms['test4']->tid, $this->terms['test3']->tid),
+      array($this->terms['test5']->tid, $this->terms['test3']->tid),
+      array($this->terms['sub1']->tid, $this->terms['test5']->tid),
+      array($this->terms['sub2']->tid, $this->terms['sub1']->tid),
+      array($this->terms['sub3']->tid, $this->terms['sub2']->tid),
+    );
+
+    $gen_nids = array();
+    for ($i = 0; $i < 8; $i++) {
+      $node = $this->drupalCreateNode(
+        array(
+          'type' => 'article',
+          'title' => "Test $i",
+          'field_tags' => array(LANGUAGE_NONE => $tids[$i]),
+          'created' => $time - $i,
+        )
+      );
+      $gen_nids[] = $node->nid;
+    }
+
+    $nids = taxonomy_edge_select_nodes($this->terms['test1']->tid, TRUE, 4, 4);
+    $expect = array($gen_nids[0], $gen_nids[1], $gen_nids[2], $gen_nids[3]);
+    $match = $expect == $nids;
+    $message = "Select nodes for 'test1' first page limit 4" . ($match ? "" : "\n<pre>Assumed:\n" . print_r($expect, TRUE) . "\nGot:\n" . print_r($nids, TRUE));
+    $this->assertTRUE($match, $message);
+
+    $_GET['page'] = "0,1";
+    $nids = taxonomy_edge_select_nodes($this->terms['test1']->tid, TRUE, 4, 4);
+    $expect = array($gen_nids[4], $gen_nids[5]);
+    $match = $expect == $nids;
+    $message = "Select nodes for 'test1' second page limit 4" . ($match ? "" : "\n<pre>Assumed:\n" . print_r($expect, TRUE) . "\nGot:\n" . print_r($nids, TRUE));
+    $this->assertTRUE($match, $message);
+    unset($_GET['page']);
+
+    $nids = taxonomy_edge_select_nodes($this->terms['test1']->tid, TRUE, 30, 4);
+    $expect = array($gen_nids[0], $gen_nids[1], $gen_nids[2], $gen_nids[3], $gen_nids[4], $gen_nids[5]);
+    $match = $expect == $nids;
+    $message = "Select nodes for 'test1'" . ($match ? "" : "\n<pre>Assumed:\n" . print_r($expect, TRUE) . "\nGot:\n" . print_r($nids, TRUE));
+    $this->assertTRUE($match, $message);
+  }
 
   function formatTree() {
     $vid = $this->vocabulary->vid;

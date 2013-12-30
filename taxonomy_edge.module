@@ -878,37 +878,45 @@ function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth 
 
   // If no depth, just use core (faster query due to no joins).
   if ($depth == 0) {
-    $args = $order ? array($tid, $pager, $limit, $order) : array($tid, $pager, $limit);
+    $args = isset($order) ? array($tid, $pager, $limit, $order) : array($tid, $pager, $limit);
     return call_user_func_array('taxonomy_select_nodes', $args);
   }
 
   // Set default order if not specified.
   if (!isset($order)) {
-    $order = array('n.sticky' => 'DESC', 'n.created' => 'DESC', 'n.nid' => 'DESC');
+    $order = array(
+      'n.sticky' => 'DESC',
+      'n.created' => 'DESC',
+      'n.nid' => 'DESC'
+    );
   }
+
+  // Ensure that valid (but ridiculous?) usage doesn't break query.
+  unset($order['t.tid']);
 
   // Lookup vid for better query on edge table.
   $vid = db_query("SELECT vid FROM {taxonomy_term_data} WHERE tid = :tid", array(':tid' => $tid))->fetchField();
 
   // Locate tids to search in.
-  $subquery = db_select('taxonomy_term_edge', 'e');
+  $subquery = db_select('taxonomy_index', 'i');
+  $subquery->join('taxonomy_term_edge', 'e', 'e.tid = i.tid');
   $subquery->condition('e.parent', $tid);
   $subquery->condition('e.vid', $vid);
   $subquery->condition('e.distance', $depth, '<=');
-  $subquery->fields('e', array('tid'));
+  $subquery->fields('i', array('nid'));
+  $subquery->distinct();
 
   // Find nodes.
-  $query = db_select('taxonomy_index', 't');
-  $query->join('node', 'n', 'n.nid = t.nid');
+  $query = db_select('node', 'n');
   $query->addTag('node_access');
-  $query->condition('t.tid', $subquery, 'IN');
+  $query->condition('n.nid', $subquery, 'IN');
   if ($pager) {
     $count_query = db_select('taxonomy_index', 't');
     $count_query->join('taxonomy_term_edge', 'e', 'e.tid = t.tid');
     $count_query->condition('e.parent', $tid);
     $count_query->condition('e.vid', $vid);
     $count_query->condition('e.distance', $depth, '<=');
-    $count_query->addExpression('COUNT(1)');
+    $count_query->addExpression('COUNT(DISTINCT t.nid)');
 
     $query = $query->extend('PagerDefault');
     if ($limit !== FALSE) {
@@ -922,7 +930,6 @@ function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth 
     }
   }
   $query->addField('n', 'nid');
-  $query->addField('t', 'tid');
   foreach ($order as $field => $direction) {
     $query->orderBy($field, $direction);
     // ORDER BY fields need to be loaded too, assume they are in the form
