@@ -19,7 +19,7 @@ function taxonomy_edge_drush_command() {
       'order' => 'Rebuild order',
     ),
     'examples' => array(
-      'drush rebuild-edges tags',
+      'drush rebuild-edges tags --order' => 'Rebuild edges and order for vocabulary "tags"',
     ),
   );
 
@@ -29,7 +29,7 @@ function taxonomy_edge_drush_command() {
       'type' => 'Name of the vocabulary (e.g. tags)',
     ),
     'examples' => array(
-      'drush rebuild-order tags',
+      'drush rebuild-order tags' => 'Rebuild order for vocabulary "tags"',
     ),
   );
   return $items;
