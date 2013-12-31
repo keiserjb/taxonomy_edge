@@ -911,7 +911,7 @@ function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth 
   // Lookup vid for better query on edge table.
   $vid = db_query("SELECT vid FROM {taxonomy_term_data} WHERE tid = :tid", array(':tid' => $tid))->fetchField();
 
-  // Locate tids to search in.
+  // Locate nodes to.
   $subquery = db_select('taxonomy_index', 'i');
   $subquery->join('taxonomy_term_edge', 'e', 'e.tid = i.tid');
   $subquery->condition('e.parent', $tid);
@@ -920,7 +920,7 @@ function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth 
   $subquery->fields('i', array('nid'));
   $subquery->distinct();
 
-  // Find nodes.
+  // Fetch nodes.
   $query = db_select('node', 'n');
   $query->addTag('node_access');
   $query->condition('n.nid', $subquery, 'IN');
