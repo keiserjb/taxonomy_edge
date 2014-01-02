@@ -259,6 +259,7 @@ function taxonomy_edge_update_7101(&$sandbox) {
  */
 function taxonomy_edge_update_7102() {
   _taxonomy_edge_add_new_indexes(array('taxonomy_index:nid'));
+  menu_rebuild();
 }
 
 /**

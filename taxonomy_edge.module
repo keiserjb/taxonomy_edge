@@ -918,7 +918,6 @@ function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth 
   $subquery->condition('e.vid', $vid);
   $subquery->condition('e.distance', $depth, '<=');
   $subquery->fields('i', array('nid'));
-  $subquery->distinct();
 
   // Fetch nodes.
   $query = db_select('node', 'n');
