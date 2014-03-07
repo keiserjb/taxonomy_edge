@@ -154,26 +154,29 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
   $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
   $cache = &drupal_static('taxonomy_edge_tree_cache', array());
 
-  // Cache per vocabulary.
-  if (!isset($cache[$vid])) {
-    $cache[$vid] = array();
-  }
-  $cache = &$cache[$vid];
 
   // Return cache if present.
-  if ($static_cache && isset($cache[$parent])) {
-    $tree = array();
-    for ($i = $cache[$parent]['offset']; $i < $cache[$parent]['offset'] + $cache[$parent]['count']; $i++) {
-      $clone = clone $cache[$parent]['data'][$i];
-      $clone->depth -= $cache[$parent]['depth'];
-      if ($clone->depth < 0) {
-        break;
-      }
-      if (!$max_depth || $clone->depth < $max_depth) {
-        $tree[] = $clone;
-      }
+  if ($static_cache) {
+    // Cache per vocabulary.
+    if (!isset($cache[$vid])) {
+      $cache[$vid] = array();
     }
-    return $tree;
+    $cache = &$cache[$vid];
+
+    if (isset($cache[$parent])) {
+      $tree = array();
+      for ($i = $cache[$parent]['offset']; $i < $cache[$parent]['offset'] + $cache[$parent]['count']; $i++) {
+        $clone = clone $cache[$parent]['data'][$i];
+        $clone->depth -= $cache[$parent]['depth'];
+        if ($clone->depth < 0) {
+          break;
+        }
+        if (!$max_depth || $clone->depth < $max_depth) {
+          $tree[] = $clone;
+        }
+      }
+      return $tree;
+    }
   }
 
   // No cache, let's fetch from db.
