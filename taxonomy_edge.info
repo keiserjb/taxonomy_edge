@@ -8,4 +8,3 @@ configure = admin/structure/taxonomy/edge
 
 files[] = tests/tree.test
 files[] = tests/unit.test
-

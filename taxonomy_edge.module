@@ -337,7 +337,8 @@ function taxonomy_edge_theme() {
  */
 function taxonomy_edge_reorder_submit($form, &$form_state) {
   $vocabulary = $form['#vocabulary'];
-  $hierarchy = 0; // Update the current hierarchy type as we go.
+  // Update the current hierarchy type as we go.
+  $hierarchy = 0;
 
   $changed_terms = array();
   $tree = taxonomy_get_tree($vocabulary->vid);

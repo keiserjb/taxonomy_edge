@@ -14,8 +14,9 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
   $exclude_root = variable_get('taxonomy_edge_exclude_root', TRUE);
   $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
 
-  // @todo Optimize this. Currently we cannot use the static cache when using parent,
-  //       because it's expected that the entire vocabulary is present in the static cache.
+  // @todo Optimize this. Currently we cannot use the static cache when using
+  //       parent, because it's expected that the entire vocabulary is present
+  //       in the static cache.
   $static_cache = $static_cache && !$parent;
 
   if ($static_cache) {
