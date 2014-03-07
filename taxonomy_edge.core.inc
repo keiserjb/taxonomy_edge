@@ -154,6 +154,12 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
   $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
   $cache = &drupal_static('taxonomy_edge_tree_cache', array());
 
+  // Cache per vocabulary.
+  if (!isset($cache[$vid])) {
+    $cache[$vid] = array();
+  }
+  $cache = &$cache[$vid];
+
   // Return cache if present.
   if ($static_cache && isset($cache[$parent])) {
     $tree = array();
