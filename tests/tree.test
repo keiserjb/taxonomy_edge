@@ -312,14 +312,14 @@ sub3
   function testNodes() {
     $time = time();
     $tids = array(
-      array($this->terms['test1']->tid, $this->terms['test5']->tid),
-      array($this->terms['test2']->tid, $this->terms['test5']->tid),
-      array($this->terms['test3']->tid, $this->terms['test5']->tid),
-      array($this->terms['test4']->tid, $this->terms['test3']->tid),
-      array($this->terms['test5']->tid, $this->terms['test3']->tid),
-      array($this->terms['sub1']->tid, $this->terms['test5']->tid),
-      array($this->terms['sub2']->tid, $this->terms['sub1']->tid),
-      array($this->terms['sub3']->tid, $this->terms['sub2']->tid),
+      array(array('tid' => $this->terms['test1']->tid), array('tid' => $this->terms['test5']->tid)),
+      array(array('tid' => $this->terms['test2']->tid), array('tid' => $this->terms['test5']->tid)),
+      array(array('tid' => $this->terms['test3']->tid), array('tid' => $this->terms['test5']->tid)),
+      array(array('tid' => $this->terms['test4']->tid), array('tid' => $this->terms['test3']->tid)),
+      array(array('tid' => $this->terms['test5']->tid), array('tid' => $this->terms['test3']->tid)),
+      array(array('tid' => $this->terms['sub1']->tid), array('tid' => $this->terms['test5']->tid)),
+      array(array('tid' => $this->terms['sub2']->tid), array('tid' => $this->terms['sub1']->tid)),
+      array(array('tid' => $this->terms['sub3']->tid), array('tid' => $this->terms['sub2']->tid)),
     );
 
     $gen_nids = array();
