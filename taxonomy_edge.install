@@ -10,20 +10,46 @@
 function taxonomy_edge_install() {
   $t = get_t();
   _taxonomy_edge_add_new_indexes(TRUE);
-  drupal_set_message($t('Taxonomy Edge is now installed. Add the provided patch to the core module Taxonomy module for better performance.'));
-  drupal_set_message($t('Taxonomy Edge settings are available under !link',
+  backdrop_set_message($t('Taxonomy Edge is now installed. Add the provided patch to the core module Taxonomy module for better performance.'));
+  backdrop_set_message($t('Taxonomy Edge settings are available under !link',
     array('!link' => l($t('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy/edge'))
   ));
-  drupal_set_message($t('Remember to build trees: !link',
+  backdrop_set_message($t('Remember to build trees: !link',
     array('!link' => l($t('Administer > Structure > Taxonomy'), 'admin/structure/taxonomy'))
   ));
+  // Dynamically generated variable data was detected on the following lines.
 }
 
 /**
  * Implements hook_uninstall().
  */
 function taxonomy_edge_uninstall() {
-  drupal_set_message(st('Taxonomy Edge is now uninstalled. You may remove the provided patch to the core module Taxonomy module if applicable.'));
+  // Drop the taxonomy_term_edge table.
+  if (db_table_exists('taxonomy_term_edge')) {
+    db_drop_table('taxonomy_term_edge');
+  }
+
+  // Drop the taxonomy_term_edge_order table.
+  if (db_table_exists('taxonomy_term_edge_order')) {
+    db_drop_table('taxonomy_term_edge_order');
+  }
+
+  // Clear configuration settings.
+  $config_names = [
+    'taxonomy_edge_max_depth',
+    'taxonomy_edge_build_realtime',
+    'taxonomy_edge_static_caching',
+    'taxonomy_edge_optimized_get_tree',
+    'taxonomy_edge_override_term_pages',
+    'taxonomy_edge_exclude_root',
+  ];
+  $config = config('taxonomy_edge.settings');
+  foreach ($config_names as $config_name) {
+    $config->clear($config_name);
+  }
+  $config->save();
+
+  backdrop_set_message(st('Taxonomy Edge is now uninstalled. You may remove the provided patch to the core module Taxonomy module if applicable.'));
 }
 
 /**
@@ -44,28 +70,28 @@ function taxonomy_edge_schema() {
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
-        'default' => 0
+        'default' => 0,
       ),
       'tid' => array(
         'description' => 'Term ID',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
-        'default' => 0
+        'default' => 0,
       ),
       'parent' => array(
         'description' => 'Parent Term ID',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
-        'default' => 0
+        'default' => 0,
       ),
       'distance' => array(
         'description' => 'Distance to parent (depth)',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
-        'default' => 0
+        'default' => 0,
       ),
     ),
     'primary key' => array('eid'),
@@ -89,21 +115,21 @@ function taxonomy_edge_schema() {
         'type' => 'int',
         'unsigned' => FALSE,
         'not null' => TRUE,
-        'default' => 0
+        'default' => 0,
       ),
       'parent' => array(
         'description' => 'Parent term ID',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
-        'default' => 0
+        'default' => 0,
       ),
       'eid' => array(
         'description' => 'Edge ID',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
-        'default' => 0
+        'default' => 0,
       ),
     ),
     'primary key' => array('oid'),
@@ -126,142 +152,11 @@ function taxonomy_edge_schema_alter(&$schema) {
   $schema['taxonomy_index']['indexes']['idx_taxonomy_edge'] = array('tid', 'nid');
 }
 
-/**
- * Fixup schema version and broken upgrade paths.
- */
-function taxonomy_edge_update_7101(&$sandbox) {
-  if (!isset($sandbox['vocabularies'])) {
-    $schema_version = db_query("SELECT schema_version FROM {system} WHERE name = 'taxonomy_edge'")->fetchField();
-    if ($schema_version == '6102') {
-      return t('Nothing to do ... already up to date');
-    }
+// TODO The old hook_update_N functions cannot be applied to Backdrop.
+function taxonomy_edge_update_7101(&$sandbox) { }
 
-    $schema = array();
-    $schema['taxonomy_term_edge'] = array(
-      'description' => 'Stores edge list for taxonomies.',
-      'fields' => array(
-        'eid' => array(
-          'description' => 'Edge ID',
-          'type' => 'serial',
-          'unsigned' => TRUE,
-          'not null' => TRUE,
-        ),
-        'vid' => array(
-          'description' => 'Vocabulary ID',
-          'type' => 'int',
-          'unsigned' => TRUE,
-          'not null' => TRUE,
-          'default' => 0
-        ),
-        'tid' => array(
-          'description' => 'Term ID',
-          'type' => 'int',
-          'unsigned' => TRUE,
-          'not null' => TRUE,
-          'default' => 0
-        ),
-        'parent' => array(
-          'description' => 'Parent Term ID',
-          'type' => 'int',
-          'unsigned' => TRUE,
-          'not null' => TRUE,
-          'default' => 0
-        ),
-        'distance' => array(
-          'description' => 'Distance to parent (depth)',
-          'type' => 'int',
-          'unsigned' => TRUE,
-          'not null' => TRUE,
-          'default' => 0
-        ),
-      ),
-      'primary key' => array('eid'),
-      'indexes' => array(
-        'idx_update' => array('vid', 'distance', 'parent'),
-        'idx_depth' => array('parent', 'distance', 'vid'),
-        'idx_term' => array('tid', 'distance'),
-        'idx_tree' => array('parent', 'vid', 'distance'),
-      ),
-    );
-
-    $schema['taxonomy_term_edge_order'] = array(
-      'description' => 'Sequencing table for sorting taxonomies.',
-      'fields' => array(
-        'oid' => array(
-          'description' => 'Order ID',
-          'type' => 'serial',
-        ),
-        'vid' => array(
-          'description' => 'Vocabulary ID',
-          'type' => 'int',
-          'unsigned' => FALSE,
-          'not null' => TRUE,
-          'default' => 0
-        ),
-        'parent' => array(
-          'description' => 'Parent term ID',
-          'type' => 'int',
-          'unsigned' => TRUE,
-          'not null' => TRUE,
-          'default' => 0
-        ),
-        'eid' => array(
-          'description' => 'Edge ID',
-          'type' => 'int',
-          'unsigned' => TRUE,
-          'not null' => TRUE,
-          'default' => 0
-        ),
-      ),
-      'primary key' => array('oid'),
-      'indexes' => array(
-        'idx_order' => array('vid', 'parent'),
-        'idx_edge' => array('eid'),
-      ),
-    );
-
-    db_drop_table('taxonomy_term_edge');
-    db_drop_table('taxonomy_term_edge_order');
-    db_create_table('taxonomy_term_edge', $schema['taxonomy_term_edge']);
-    db_create_table('taxonomy_term_edge_order', $schema['taxonomy_term_edge_order']);
-
-    // Initialize vocabularies to rebuild.
-    $sandbox['vocabularies'] = array_values(taxonomy_get_vocabularies());
-    $sandbox['number_of_vocabularies'] = count($sandbox['vocabularies']);
-    $sandbox['current'] = 0;
-    $sandbox['#finished'] = 1 / ($sandbox['number_of_vocabularies'] + 1);
-    $sandbox['message'] = array();
-
-    return t('Table created and indexes updated.');
-  }
-
-  // Grab next vocabulary to be processed.
-  $vocabularies = $sandbox['vocabularies'];
-  $number_of_vocabularies = $sandbox['number_of_vocabularies'];
-  $current = &$sandbox['current'];
-  $vocabulary = $vocabularies[$current++];
-
-  // Process that vocabulary.
-  module_load_include('rebuild.inc', 'taxonomy_edge');
-  $sub_context = array();
-  taxonomy_edge_rebuild_edges($vocabulary->vid, $sub_context);
-  $sandbox['message'] = array_merge($sandbox['message'], $sub_context['results']);
-  $sub_context = array();
-  taxonomy_edge_rebuild_order($vocabulary->vid, $sub_context);
-  $sandbox['message'] = array_merge($sandbox['message'], $sub_context['results']);
-
-  // Next step or finish.
-  $sandbox['#finished'] = (2 + $current) / ($number_of_vocabularies + 1);
-  return implode('<br/>', $sandbox['message']);
-}
-
-/**
- * Update and add indexes.
- */
-function taxonomy_edge_update_7102() {
-  _taxonomy_edge_add_new_indexes(array('taxonomy_index:nid'));
-  menu_rebuild();
-}
+// TODO The old hook_update_N functions cannot be applied to Backdrop.
+function taxonomy_edge_update_7102() { }
 
 /**
  * Add extra indexes to tables.
@@ -280,4 +175,32 @@ function _taxonomy_edge_add_new_indexes($force = FALSE) {
       }
     }
   }
+}
+
+/**
+ * Implements hook_update_last_removed().
+ */
+function taxonomy_edge_update_last_removed() {
+  return 7102;
+}
+
+/**
+ * Migrate taxonomy_edge variables to config.
+ */
+function taxonomy_edge_update_1000() {
+  $config = config('taxonomy_edge.settings');
+  $config->set('taxonomy_edge_max_depth', update_variable_get('taxonomy_edge_max_depth', 'TAXONOMY_EDGE_MAX_DEPTH'));
+  $config->set('taxonomy_edge_build_realtime', update_variable_get('taxonomy_edge_build_realtime', 'TAXONOMY_EDGE_BUILD_REALTIME'));
+  $config->set('taxonomy_edge_static_caching', update_variable_get('taxonomy_edge_static_caching', 'TAXONOMY_EDGE_STATIC_CACHING'));
+  $config->set('taxonomy_edge_optimized_get_tree', update_variable_get('taxonomy_edge_optimized_get_tree', 'TAXONOMY_EDGE_OPTIMIZED_GET_TREE'));
+  $config->set('taxonomy_edge_override_term_pages', update_variable_get('taxonomy_edge_override_term_pages', ''));
+  $config->set('taxonomy_edge_exclude_root', update_variable_get('taxonomy_edge_exclude_root', TRUE));
+  $config->save();
+
+  update_variable_del('taxonomy_edge_max_depth');
+  update_variable_del('taxonomy_edge_build_realtime');
+  update_variable_del('taxonomy_edge_static_caching');
+  update_variable_del('taxonomy_edge_optimized_get_tree');
+  update_variable_del('taxonomy_edge_override_term_pages');
+  update_variable_del('taxonomy_edge_exclude_root');
 }

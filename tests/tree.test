@@ -4,7 +4,7 @@
  * Web test cases for Taxonomy Edge.
  */
 
-class TaxonomyEdgeTreeTestCase extends DrupalWebTestCase {
+class TaxonomyEdgeTreeTestCase extends BackdropWebTestCase {
   private $terms = array();
   private $vocabulary;
 
@@ -291,7 +291,10 @@ sub3
   function testParents() {
     $terms = &$this->terms;
     $parents = taxonomy_edge_get_parents($terms['test5']->tid);
-    $expect = array(1 =>  $terms['test4']->tid, 2 => $terms['test1']->tid);
+    $expect = array(
+      1 => $terms['test4']->tid,
+      2 => $terms['test1']->tid,
+    );
     $match = $expect == $parents;
     $message = "Get parents for 'test5'" . ($match ? "" : "\n<pre>Assumed:\n" . print_r($expect, TRUE) . "\nGot:\n" . print_r($parents, TRUE));
     $this->assertTRUE($match, $message);
@@ -308,7 +311,7 @@ sub3
     $message = "Get top tid for 'test3'" . ($match ? "" : "\n<pre>Assumed:\n" . print_r($expect, TRUE) . "\nGot:\n" . print_r($tids, TRUE));
     $this->assertTRUE($match, $message);
   }
-  
+
   function testNodes() {
     $time = time();
     $tids = array(
@@ -324,13 +327,13 @@ sub3
 
     $gen_nids = array();
     for ($i = 0; $i < 8; $i++) {
-      $node = $this->drupalCreateNode(
+      $node = $this->backdropCreateNode(
         array(
-          'type' => 'article',
-          'title' => "Test $i",
-          'field_tags' => array(LANGUAGE_NONE => $tids[$i]),
-          'created' => $time - $i,
-        )
+        'type' => 'article',
+        'title' => "Test $i",
+        'field_tags' => array(LANGUAGE_NONE => $tids[$i]),
+        'created' => $time - $i,
+      )
       );
       $gen_nids[] = $node->nid;
     }

@@ -11,18 +11,19 @@
  * @see taxonomy_get_tree()
  */
 function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE) {
-  $exclude_root = variable_get('taxonomy_edge_exclude_root', TRUE);
-  $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
+  $config = config('taxonomy_edge.settings');
+  $exclude_root = $config->get('taxonomy_edge_exclude_root');
+  $static_cache = $config->get('taxonomy_edge_static_caching');
 
   // @todo Optimize this. Currently we cannot use the static cache when using
-  //       parent, because it's expected that the entire vocabulary is present
-  //       in the static cache.
+//       parent, because it's expected that the entire vocabulary is present
+//       in the static cache.
   $static_cache = $static_cache && !$parent;
 
   if ($static_cache) {
-    $children = &drupal_static('taxonomy_get_tree', array());
-    $parents = &drupal_static('taxonomy_get_tree:parents', array());
-    $terms = &drupal_static('taxonomy_get_tree:terms', array());
+    $children = &backdrop_static('taxonomy_get_tree', array());
+    $parents = &backdrop_static('taxonomy_get_tree:parents', array());
+    $terms = &backdrop_static('taxonomy_get_tree:terms', array());
   }
   else {
     $children = $parents = $terms = array();
@@ -70,7 +71,7 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
     $term_entities = taxonomy_term_load_multiple(array_keys($terms[$vid]));
   }
 
-  $max_depth = (!isset($max_depth)) ? count($children[$vid]) : $max_depth;
+  $max_depth = (!isset($max_depth))?count($children[$vid]) : $max_depth;
   $tree = array();
 
   // Keeps track of the parents we have to process, the last entry is used
@@ -151,8 +152,8 @@ function taxonomy_edge_get_tree_optimized($vid, $parent = 0, $max_depth = NULL, 
   }
 
   // Setup static cache if applicable.
-  $static_cache = variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING);
-  $cache = &drupal_static('taxonomy_edge_tree_cache', array());
+  $static_cache = config_get('taxonomy_edge.settings', 'taxonomy_edge_static_caching');
+  $cache = &backdrop_static('taxonomy_edge_tree_cache', array());
 
 
   // Return cache if present.

@@ -1,13 +1,9 @@
 name = Views Taxonomy Edge
 description = Views for taxonomies using Taxonomy Edge
 package = Views
-core = 7.x
+backdrop = 1.x
+type = module
 
 dependencies[] = taxonomy_edge
 dependencies[] = views
 
-files[] = handlers/views_handler_argument_term_edge_node_tid_depth.inc
-files[] = handlers/views_handler_argument_term_edge_node_tid_depth_modifier.inc
-files[] = handlers/views_handler_filter_term_edge_node_tid_depth.inc
-files[] = handlers/views_join_term_edge.inc
-files[] = handlers/views_handler_sort_term_edge_hierarchy.inc

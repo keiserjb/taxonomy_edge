@@ -75,3 +75,16 @@ function views_taxonomy_edge_views_data_alter(&$data) {
     ),
   );
 }
+
+/**
+ * Implements hook_autoload_info().
+ */
+function views_taxonomy_edge_autoload_info() {
+  return array(
+    'views_handler_argument_term_edge_node_tid_depth' => 'handlers/views_handler_argument_term_edge_node_tid_depth.inc',
+    'views_handler_argument_term_edge_node_tid_depth_modifier' => 'handlers/views_handler_argument_term_edge_node_tid_depth_modifier.inc',
+    'views_handler_filter_term_edge_node_tid_depth' => 'handlers/views_handler_filter_term_edge_node_tid_depth.inc',
+    'views_handler_sort_term_edge_hierarchy' => 'handlers/views_handler_sort_term_edge_hierarchy.inc',
+    'views_join_term_edge' => 'handlers/views_join_term_edge.inc',
+  );
+}

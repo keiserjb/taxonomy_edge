@@ -52,7 +52,7 @@ define('TAXONOMY_EDGE_OVERRIDE_TERM_PAGES', TRUE);
 function taxonomy_edge_core_override_info() {
   return array(
     'taxonomy_get_tree' => array(
-      'callback' => 'taxonomy_edge_get_tree'
+      'callback' => 'taxonomy_edge_get_tree',
     ),
   );
 }
@@ -76,7 +76,7 @@ function taxonomy_edge_permission() {
     'administer taxonomy edge' => array(
       'title' => t('Administer Taxonomy Edge'),
       'description' => t('Perform administration tasks for Taxonomy Edge.'),
-    )
+    ),
   );
 }
 
@@ -88,25 +88,36 @@ function taxonomy_edge_menu() {
 
   // Settings page.
   $items['admin/structure/taxonomy/edge'] = array(
-    'title'            => 'Edge',
-    'description'      => 'Administer taxonomy edges',
-    'page callback'    => 'drupal_get_form',
-    'page arguments'   => array('taxonomy_edge_settings_form'),
+    'title' => 'Edge',
+    'description' => 'Administer taxonomy edges',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('taxonomy_edge_settings_form'),
     'access arguments' => array('administer taxonomy edge'),
-    'type'             => MENU_LOCAL_TASK,
-    'file'             => 'taxonomy_edge.admin.inc'
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'taxonomy_edge.admin.inc',
   );
   $items['admin/structure/taxonomy/rebuild/%'] = array(
-    'title'            => 'Rebuild edges',
-    'description'      => 'Rebuild taxonomy edges',
-    'page callback'    => 'drupal_get_form',
-    'page arguments'   => array('taxonomy_edge_rebuild_page_confirm', 4, 5),
+    'title' => 'Rebuild edges',
+    'description' => 'Rebuild taxonomy edges',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('taxonomy_edge_rebuild_page_confirm', 4, 5),
     'access arguments' => array('administer taxonomy edge'),
-    'type'             => MENU_CALLBACK,
-    'file'             => 'taxonomy_edge.admin.inc'
+    'type' => MENU_CALLBACK,
+    'file' => 'taxonomy_edge.admin.inc',
   );
 
   return $items;
+}
+
+/**
+ * Implements hook_config_info().
+ */
+function taxonomy_edge_config_info() {
+  $prefixes['taxonomy_edge.settings'] = array(
+    'label' => t('Taxonomy Edge settings'),
+    'group' => t('Configuration'),
+  );
+  return $prefixes;
 }
 
 /**
@@ -114,7 +125,7 @@ function taxonomy_edge_menu() {
  */
 function taxonomy_edge_menu_alter(&$items) {
   // Bring /level and /all back into taxonomy pages and feeds.
-  if (variable_get('taxonomy_edge_override_term_pages')) {
+  if (config_get('taxonomy_edge.settings', 'taxonomy_edge_override_term_pages')) {
     $items['taxonomy/term/%taxonomy_term'] = array(
       'title' => 'Taxonomy term',
       'title callback' => 'taxonomy_term_title',
@@ -184,7 +195,7 @@ function taxonomy_edge_cronapi($op, $job = NULL) {
     case 'list':
       return array(
         'taxonomy_edge_cron_rebuild' => 'Rebuild taxonomy edges',
-        'taxonomy_edge_cron' => 'Resort invalid trees'
+        'taxonomy_edge_cron' => 'Resort invalid trees',
       );
 
     case 'rule':
@@ -227,8 +238,8 @@ function taxonomy_edge_taxonomy_vocabulary_insert($vocabulary) {
   taxonomy_edge_taxonomy_vocabulary_delete($vocabulary);
   db_insert('taxonomy_term_edge')
     ->fields(array(
-      'vid' => $vocabulary->vid,
-    ))
+    'vid' => $vocabulary->vid,
+  ))
     ->execute();
 }
 
@@ -298,17 +309,17 @@ function taxonomy_edge_form_taxonomy_overview_vocabularies_alter(&$form, &$form_
       $form[$vocabulary->vid]['rebuild_edges'] = array(
         '#type' => 'link',
         '#title' => t('rebuild edges'),
-        '#href' => "admin/structure/taxonomy/rebuild/edges/$vocabulary->machine_name"
+        '#href' => "admin/structure/taxonomy/rebuild/edges/$vocabulary->machine_name",
       );
       $form[$vocabulary->vid]['rebuild_order'] = array(
         '#type' => 'link',
         '#title' => t('rebuild order'),
-        '#href' => "admin/structure/taxonomy/rebuild/order/$vocabulary->machine_name"
+        '#href' => "admin/structure/taxonomy/rebuild/order/$vocabulary->machine_name",
       );
       $form[$vocabulary->vid]['rebuild_all'] = array(
         '#type' => 'link',
         '#title' => t('rebuild everything'),
-        '#href' => "admin/structure/taxonomy/rebuild/all/$vocabulary->machine_name"
+        '#href' => "admin/structure/taxonomy/rebuild/all/$vocabulary->machine_name",
       );
     }
     $form['#theme'] = 'taxonomy_edge_overview_vocabularies';
@@ -322,8 +333,8 @@ function taxonomy_edge_theme() {
   return array(
     'taxonomy_edge_overview_vocabularies' => array(
       'render element' => 'form',
-      'file' => 'taxonomy_edge.theme.inc'
-    )
+      'file' => 'taxonomy_edge.theme.inc',
+    ),
   );
 }
 
@@ -417,7 +428,7 @@ function taxonomy_edge_reorder_submit($form, &$form_state) {
  */
 function taxonomy_edge_process_queue_item($vid) {
   if (lock_acquire('taxonomy_edge_rebuild_edges_' . $vid)) {
-    $queue = DrupalQueue::get('taxonomy_edge_items_' . $vid, TRUE);
+    $queue = BackdropQueue::get('taxonomy_edge_items_' . $vid, TRUE);
     $max = 1000;
     while ($max-- > 0 && ($item = $queue->claimItem())) {
       $term = $item->data;
@@ -469,10 +480,10 @@ function taxonomy_edge_cron_rebuild() {
  */
 function _taxonomy_edge_delete_subtree($vid, $tids, $type = 0) {
   // @fixme MySQL can not use EXISTS or IN without temp tables when deleting.
-  //        SQLite cannot perform join delete.
-  //        MySQL and Postgres differ in joined delete syntax.
-  //        Use optimized joined delete for MySQL and subquery for others.
-  //        With MySQL 5.6 we might be able to switch to a subquery method only.
+//        SQLite cannot perform join delete.
+//        MySQL and Postgres differ in joined delete syntax.
+//        Use optimized joined delete for MySQL and subquery for others.
+//        With MySQL 5.6 we might be able to switch to a subquery method only.
   $db_type = Database::getConnection()->databaseType();
   $type = $type == 0 ? '' : 'AND e2.distance > e.distance';
   switch ($db_type) {
@@ -559,9 +570,10 @@ function _taxonomy_edge_taxonomy_term_insert($term) {
 
     db_insert('taxonomy_term_edge')
       ->fields(array(
-        'vid' => $term->vid,
-        'tid' => $term->tid,
-        'parent' => $term->tid))
+      'vid' => $term->vid,
+      'tid' => $term->tid,
+      'parent' => $term->tid,
+    ))
       ->execute();
 
     db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
@@ -588,7 +600,7 @@ function _taxonomy_edge_taxonomy_term_update($term) {
   $tx = db_transaction();
 
   // Invalidate sorted tree in case of name/weight change.
-  $modified = &drupal_static('taxonomy_edge_save_check_modified', TRUE);
+  $modified = &backdrop_static('taxonomy_edge_save_check_modified', TRUE);
   if ($modified) {
     taxonomy_edge_invalidate_order($term->vid);
   }
@@ -626,10 +638,10 @@ function _taxonomy_edge_taxonomy_term_delete($term) {
 function _taxonomy_edge_taxonomy_term_queue($term, $op) {
   // Wait for rebuild to clear queue and initiate snapshot of term_hierarchy
   if (lock_may_be_available('taxonomy_edge_rebuild_edges_' . $term->vid)) {
-    $queue = DrupalQueue::get('taxonomy_edge_items_' . $term->vid, TRUE);
+    $queue = BackdropQueue::get('taxonomy_edge_items_' . $term->vid, TRUE);
     $term->operation = $op;
     $queue->createItem($term);
-    $queue = DrupalQueue::get('taxonomy_edge', TRUE);
+    $queue = BackdropQueue::get('taxonomy_edge', TRUE);
     $queue->createItem($term->vid);
   }
 }
@@ -756,8 +768,8 @@ function taxonomy_edge_get_max_depth($vid, $parent = 0) {
  *   TRUE if possible, FALSE if not.
  */
 function taxonomy_edge_is_build_realtime($vid) {
-  if (variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME)) {
-    $queue = DrupalQueue::get('taxonomy_edge_items_' . $vid, TRUE);
+  if (config_get('taxonomy_edge.settings', 'taxonomy_edge_build_realtime')) {
+    $queue = BackdropQueue::get('taxonomy_edge_items_' . $vid, TRUE);
     if ($queue->numberOfItems()) {
       // Don't build realtime, if there are still items left in the queue.
       return FALSE;
@@ -870,12 +882,12 @@ function taxonomy_edge_get_top_tid($tid) {
  */
 function taxonomy_edge_get_tree($vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE) {
   // @todo Use regular taxonomy_get_tree if realtime build is disabled,
-  //       as this function might be unreliable.
+//       as this function might be unreliable.
 
   module_load_include('core.inc', 'taxonomy_edge');
 
   // Use optimized version if possible.
-  if (variable_get('taxonomy_edge_optimized_get_tree', TAXONOMY_EDGE_OPTIMIZED_GET_TREE)) {
+  if (config_get('taxonomy_edge.settings', 'taxonomy_edge_optimized_get_tree')) {
     return taxonomy_edge_get_tree_optimized($vid, $parent, $max_depth, $load_entities);
   }
   else {
@@ -887,13 +899,14 @@ function taxonomy_edge_get_tree($vid, $parent = 0, $max_depth = NULL, $load_enti
  * Reimplementation of taxonomy_select_nodes() re-allowing depth modifier.
  */
 function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth = 0, $order = NULL) {
+  // TODO This variable was probably removed in Backdrop without replacement.
   if (!variable_get('taxonomy_maintain_index_table', TRUE)) {
     return array();
   }
 
   // If no depth, just use core (faster query due to no joins).
   if ($depth == 0) {
-    $args = isset($order) ? array($tid, $pager, $limit, $order) : array($tid, $pager, $limit);
+    $args = isset($order)?array($tid, $pager, $limit, $order) : array($tid, $pager, $limit);
     return call_user_func_array('taxonomy_select_nodes', $args);
   }
 
@@ -902,7 +915,7 @@ function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth 
     $order = array(
       'n.sticky' => 'DESC',
       'n.created' => 'DESC',
-      'n.nid' => 'DESC'
+      'n.nid' => 'DESC',
     );
   }
 
@@ -952,4 +965,12 @@ function taxonomy_edge_select_nodes($tid, $pager = TRUE, $limit = FALSE, $depth 
     $query->addField($table_alias, $name);
   }
   return $query->execute()->fetchCol();
+}
+
+/**
+ * Implements hook_autoload_info().
+ */
+function taxonomy_edge_autoload_info() {
+  return array(
+  );
 }

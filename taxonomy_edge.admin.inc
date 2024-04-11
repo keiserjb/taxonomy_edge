@@ -11,37 +11,39 @@
  * @ingroup forms
  */
 function taxonomy_edge_settings_form() {
+  $config = config('taxonomy_edge.settings');
   $form = array();
+  $form['#config'] = 'taxonomy_edge.settings';
 
   $form['taxonomy_edge_max_depth'] = array(
     '#title' => t('Maximum depth'),
     '#description' => t('Fail safe for avoiding infite loops when rebuilding edges.'),
     '#type' => 'textfield',
-    '#default_value' => variable_get('taxonomy_edge_max_depth', TAXONOMY_EDGE_MAX_DEPTH),
+    '#default_value' => $config->get('taxonomy_edge_max_depth'),
   );
   $form['taxonomy_edge_build_realtime'] = array(
     '#title' => t('Build tree realtime'),
     '#description' => t('Update tree upon taxonomy modification.'),
     '#type' => 'checkbox',
-    '#default_value' => variable_get('taxonomy_edge_build_realtime', TAXONOMY_EDGE_BUILD_REALTIME),
+    '#default_value' => $config->get('taxonomy_edge_build_realtime'),
   );
   $form['taxonomy_edge_static_caching'] = array(
     '#title' => t('Use static caching'),
     '#description' => t('Use static caching for taxoomy_get_tree(). If experiencing memory exhausts, try disabling this.'),
     '#type' => 'checkbox',
-    '#default_value' => variable_get('taxonomy_edge_static_caching', TAXONOMY_EDGE_STATIC_CACHING),
+    '#default_value' => $config->get('taxonomy_edge_static_caching'),
   );
   $form['taxonomy_edge_optimized_get_tree'] = array(
     '#title' => t('Use optimized version of taxonomy_get_tree'),
     '#description' => t('Taxonomy Edge implements two versions of taxonomy_get_tree(). One that acts just like the core version except it can select subtrees but still sorts the entire vocabulary on the DB, and one that can do select and sorting on subtrees only. Check this box to select the latter one. CPU wise, this method can sometimes be slower.'),
     '#type' => 'checkbox',
-    '#default_value' => variable_get('taxonomy_edge_optimized_get_tree', TAXONOMY_EDGE_OPTIMIZED_GET_TREE),
+    '#default_value' => $config->get('taxonomy_edge_optimized_get_tree'),
   );
   $form['taxonomy_edge_override_term_pages'] = array(
     '#title' => t('Override term pages'),
     '#description' => t('Override taxonomy/term/%term pages (and feed pages also) supporting the depth modifier argument.'),
     '#type' => 'checkbox',
-    '#default_value' => variable_get('taxonomy_edge_override_term_pages', TAXONOMY_EDGE_OVERRIDE_TERM_PAGES),
+    '#default_value' => $config->get('taxonomy_edge_override_term_pages'),
   );
 
 
@@ -50,13 +52,13 @@ function taxonomy_edge_settings_form() {
     '#title' => t('Rebuild'),
   );
   $form['rebuild']['rebuild_edges'] = array(
-    '#markup' => l(t('Rebuild all edges'), 'admin/structure/taxonomy/rebuild/edges', array('query' => drupal_get_destination())) . '<br/>',
+    '#markup' => l(t('Rebuild all edges'), 'admin/structure/taxonomy/rebuild/edges', array('query' => backdrop_get_destination())) . '<br/>',
   );
   $form['rebuild']['rebuild_order'] = array(
-    '#markup' => l(t('Rebuild all orders'), 'admin/structure/taxonomy/rebuild/order', array('query' => drupal_get_destination())) . '<br/>',
+    '#markup' => l(t('Rebuild all orders'), 'admin/structure/taxonomy/rebuild/order', array('query' => backdrop_get_destination())) . '<br/>',
   );
   $form['rebuild']['rebuild_all'] = array(
-    '#markup' => l(t('Rebuild EVERYTHING'), 'admin/structure/taxonomy/rebuild/all', array('query' => drupal_get_destination())) . '<br/>',
+    '#markup' => l(t('Rebuild EVERYTHING'), 'admin/structure/taxonomy/rebuild/all', array('query' => backdrop_get_destination())) . '<br/>',
   );
 
   $form = system_settings_form($form);
@@ -79,7 +81,7 @@ function taxonomy_edge_system_settings_form_submit_custom($form, &$form_state) {
   if (!lock_acquire('menu_rebuild')) {
     lock_wait('menu_rebuild');
     if (!lock_acquire('menu_rebuild')) {
-      drupal_set_message(t("Could not rebuild menu. Please rebuild menu / clear cache to make the term pages override take effect."), 'error');
+      backdrop_set_message(t("Could not rebuild menu. Please rebuild menu / clear cache to make the term pages override take effect."), 'error');
       return;
     }
   }
@@ -95,17 +97,17 @@ function taxonomy_edge_rebuild_page_confirm($form, &$form_state, $type, $vocabul
     $vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary);
 
     if (!lock_may_be_available('taxonomy_edge_rebuild_' . $type . '_' . $vocabulary->vid)) {
-      drupal_set_message(t('Rebuild already in progress'), 'warning');
-      drupal_goto();
+      backdrop_set_message(t('Rebuild already in progress'), 'warning');
+      backdrop_goto();
     }
 
     $form['vocabulary'] = array(
       '#type' => 'value',
-      '#value' => $vocabulary
+      '#value' => $vocabulary,
     );
     $msg = t('Are you sure you want to rebuild %type for vocabulary %name?', array(
       '%type' => $type,
-      '%name' => $vocabulary->name
+      '%name' => $vocabulary->name,
     ));
   }
   else {
@@ -116,7 +118,7 @@ function taxonomy_edge_rebuild_page_confirm($form, &$form_state, $type, $vocabul
 
   $form['type'] = array(
     '#type' => 'value',
-    '#value' => $type
+    '#value' => $type,
   );
   return confirm_form($form, $msg, 'admin/structure/taxonomy');
 }

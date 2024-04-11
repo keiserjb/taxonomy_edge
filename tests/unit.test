@@ -3,7 +3,7 @@
  * @file
  */
 
-class TaxonomyEdgeTreeUnitTestCase extends DrupalUnitTestCase {
+class TaxonomyEdgeTreeUnitTestCase extends BackdropUnitTestCase {
   function setUp() {
     parent::setUp(array('taxonomy_edge'));
     module_load_include('module', 'taxonomy_edge');

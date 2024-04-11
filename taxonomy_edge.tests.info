@@ -1,0 +1,12 @@
+[TaxonomyEdgeTreeTestCase]
+name = Tree
+description = Test tree handling functions.
+group = Taxonomy Edge
+file = tests/tree.test
+
+[TaxonomyEdgeTreeUnitTestCase]
+name = Parents
+description = Unit test for Taxonomy Edge.
+group = Taxonomy Edge
+file = tests/unit.test
+

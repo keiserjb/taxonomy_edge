@@ -17,50 +17,50 @@ function theme_taxonomy_edge_overview_vocabularies($variables) {
     if (isset($form[$key]['name'])) {
       $vocabulary = &$form[$key];
       $row = array();
-      $row[] = drupal_render($vocabulary['name']);
+      $row[] = backdrop_render($vocabulary['name']);
       if (isset($vocabulary['weight'])) {
         $vocabulary['weight']['#attributes']['class'] = array(
-          'vocabulary-weight'
+          'vocabulary-weight',
         );
-        $row[] = drupal_render($vocabulary['weight']);
+        $row[] = backdrop_render($vocabulary['weight']);
       }
-      $row[] = drupal_render($vocabulary['edit']);
-      $row[] = drupal_render($vocabulary['list']);
-      $row[] = drupal_render($vocabulary['add']);
-      $row[] = drupal_render($vocabulary['rebuild_edges']);
-      $row[] = drupal_render($vocabulary['rebuild_order']);
-      $row[] = drupal_render($vocabulary['rebuild_all']);
+      $row[] = backdrop_render($vocabulary['edit']);
+      $row[] = backdrop_render($vocabulary['list']);
+      $row[] = backdrop_render($vocabulary['add']);
+      $row[] = backdrop_render($vocabulary['rebuild_edges']);
+      $row[] = backdrop_render($vocabulary['rebuild_order']);
+      $row[] = backdrop_render($vocabulary['rebuild_all']);
       $rows[] = array(
         'data' => $row,
         'class' => array(
-          'draggable'
-        )
+          'draggable',
+        ),
       );
     }
   }
   $header = array(
-    t('Vocabulary name')
+    t('Vocabulary name'),
   );
   if (isset($form['actions'])) {
     $header[] = t('Weight');
-    drupal_add_tabledrag('taxonomy', 'order', 'sibling', 'vocabulary-weight');
+    backdrop_add_tabledrag('taxonomy', 'order', 'sibling', 'vocabulary-weight');
   }
   $header[] = array(
     'data' => t('Operations'),
-    'colspan' => '3'
+    'colspan' => '3',
   );
   $header[] = array(
     'data' => t('Taxonomy Edge'),
-    'colspan' => '3'
+    'colspan' => '3',
   );
   return theme('table', array(
     'header' => $header,
     'rows' => $rows,
     'empty' => t('No vocabularies available. <a href="@link">Add vocabulary</a>.', array(
-      '@link' => url('admin/structure/taxonomy/add')
+      '@link' => url('admin/structure/taxonomy/add'),
     )),
     'attributes' => array(
-      'id' => 'taxonomy'
-    )
-  )) . drupal_render_children($form);
+      'id' => 'taxonomy',
+    ),
+  )) . backdrop_render_children($form);
 }

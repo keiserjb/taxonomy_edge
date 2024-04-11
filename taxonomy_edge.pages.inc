@@ -23,23 +23,23 @@ function taxonomy_edge_term_page($term, $depth = '0') {
   }
 
   // Assign the term name as the page title.
-  drupal_set_title($term->name);
+  backdrop_set_title($term->name);
 
   // Build breadcrumb based on the hierarchy of the term.
   $current = (object) array(
     'tid' => $term->tid,
   );
   // @todo This overrides any other possible breadcrumb and is a pure hard-coded
-  //   presumption. Make this behavior configurable per vocabulary or term.
+//   presumption. Make this behavior configurable per vocabulary or term.
   $breadcrumb = array();
-  while ($parents = taxonomy_get_parents($current->tid)) {
+  while ($parents = taxonomy_term_load_parents($current->tid)) {
     $current = array_shift($parents);
     $breadcrumb[] = l($current->name, 'taxonomy/term/' . $current->tid . '/' . $depth);
   }
   $breadcrumb[] = l(t('Home'), NULL);
   $breadcrumb = array_reverse($breadcrumb);
-  drupal_set_breadcrumb($breadcrumb);
-  drupal_add_feed('taxonomy/term/' . $term->tid . '/' . $depth . '/feed', 'RSS - ' . $term->name);
+  backdrop_set_breadcrumb($breadcrumb);
+  backdrop_add_feed('taxonomy/term/' . $term->tid . '/' . $depth . '/feed', 'RSS - ' . $term->name);
 
   $build = array();
 
@@ -49,7 +49,7 @@ function taxonomy_edge_term_page($term, $depth = '0') {
     'term' => taxonomy_term_view($term, 'full'),
   );
 
-  if ($nids = taxonomy_edge_select_nodes($term->tid, TRUE, variable_get('default_nodes_main', 10), $real_depth)) {
+  if ($nids = taxonomy_edge_select_nodes($term->tid, TRUE, config_get('system.performance', 'default_nodes_main'), $real_depth)) {
     $nodes = node_load_multiple($nids);
     $build += node_view_multiple($nodes);
     $build['pager'] = array(
@@ -83,10 +83,11 @@ function taxonomy_edge_term_feed($term, $depth = '0') {
   }
 
   $channel['link'] = url('taxonomy/term/' . $term->tid . '/' . $depth, array('absolute' => TRUE));
-  $channel['title'] = variable_get('site_name', 'Drupal') . ' - ' . $term->name;
+  $channel['title'] = config_get('system.performance', 'site_name') . ' - ' . $term->name;
   // Only display the description if we have a single term, to avoid clutter and confusion.
   // HTML will be removed from feed description.
   $channel['description'] = check_markup($term->description, $term->format, '', TRUE);
+  // TODO This variable was probably removed in Backdrop without replacement.
   $nids = taxonomy_edge_select_nodes($term->tid, FALSE, variable_get('feed_default_items', 10), $real_depth);
 
   node_feed($nids, $channel);

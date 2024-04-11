@@ -1,10 +1,9 @@
 name = Taxonomy Edge
 description = Edge lists for taxonomies
 package = Taxonomy
-core = 7.x
+backdrop = 1.x
+type = module
 
 dependencies[] = taxonomy
 configure = admin/structure/taxonomy/edge
 
-files[] = tests/tree.test
-files[] = tests/unit.test

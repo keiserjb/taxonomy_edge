@@ -10,7 +10,7 @@
 function taxonomy_edge_rebuild_edges_batch($vids) {
   $batch = array(
     'finished' => 'taxonomy_edge_rebuild_finished',
-    'file' => drupal_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
+    'file' => backdrop_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
     'title' => t('Rebuilding taxonomy edges'),
     'init_message' => t('Rebuilding taxonomy edges'),
   );
@@ -26,7 +26,7 @@ function taxonomy_edge_rebuild_edges_batch($vids) {
 function taxonomy_edge_rebuild_order_batch($vids) {
   $batch = array(
     'finished' => 'taxonomy_edge_rebuild_finished',
-    'file' => drupal_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
+    'file' => backdrop_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
     'title' => t('Rebuilding taxonomy edge order'),
     'init_message' => t('Rebuilding taxonomy edge order'),
   );
@@ -42,7 +42,7 @@ function taxonomy_edge_rebuild_order_batch($vids) {
 function taxonomy_edge_rebuild_all_batch($vids) {
   $batch = array(
     'finished' => 'taxonomy_edge_rebuild_finished',
-    'file' => drupal_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
+    'file' => backdrop_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
     'title' => t('Rebuilding taxonomy edges and order'),
     'init_message' => t('Rebuilding taxonomy edges and order'),
   );
@@ -67,7 +67,7 @@ function taxonomy_edge_rebuild_finished($success, $results, $operations) {
     $error_operation = reset($operations);
     $message = t('An error occurred while processing %error_operation with arguments: @arguments', array('%error_operation' => $error_operation[0], '@arguments' => print_r($error_operation[1], TRUE)));
   }
-  drupal_set_message($message, 'status');
+  backdrop_set_message($message, 'status');
 }
 
 /**
@@ -78,7 +78,7 @@ function taxonomy_edge_rebuild_finished($success, $results, $operations) {
  */
 function taxonomy_edge_rebuild_edges($vid, &$context) {
   $depth = 0;
-  $max_depth = variable_get('taxonomy_edge_max_depth', TAXONOMY_EDGE_MAX_DEPTH);
+  $max_depth = config_get('taxonomy_edge.settings', 'taxonomy_edge_max_depth');
 
   $vocabulary = taxonomy_vocabulary_load($vid);
   if (!$vocabulary) {
@@ -98,7 +98,7 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
   set_time_limit(86400);
 
   // Clear the queue, we're rebulding anyways ...
-  $queue = DrupalQueue::get('taxonomy_edge', TRUE);
+  $queue = BackdropQueue::get('taxonomy_edge', TRUE);
   $queue->deleteQueue();
 
   // Please use a proper isolation level, so that transaction provides us with a
