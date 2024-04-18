@@ -273,69 +273,67 @@ function taxonomy_edge_form_taxonomy_overview_terms_alter(&$form, &$form_state) 
  * Custom function to modify the taxonomy overview vocabularies table.
  */
 function taxonomy_edge_taxonomy_overview_vocabularies() {
+  $vocabularies = taxonomy_get_vocabularies(); // Get all vocabulary machine names
   $html_output = taxonomy_overview_vocabularies();
 
   $doc = new DOMDocument();
   @$doc->loadHTML(mb_convert_encoding($html_output, 'HTML-ENTITIES', 'UTF-8'));
   $xpath = new DOMXPath($doc);
 
-  // Add new "Taxonomy Edge" column to the header
+  // Add a new column to the header for "Taxonomy Edge" operations
   $headers = $xpath->query('//table[@id="vocabulary-list"]/thead/tr');
   if ($headers->length > 0) {
     $newHeader = $doc->createElement('th', t('Taxonomy Edge'));
     $headers->item(0)->appendChild($newHeader);
   }
 
-  // Modify each table row to include dropbutton-widget-like structure
+  // Modify each table row to include dropbutton-widget-like structure for taxonomy edge operations
   $rows = $xpath->query('//table[@id="vocabulary-list"]/tbody/tr');
-  foreach ($rows as $row) {
-    // The machine name should be extracted from a reliable attribute or structure
-    $machine_name = $row->childNodes->item(1)->textContent; // This is a placeholder
-    // Create the dropbutton structure
-    $cell = $doc->createElement('td');
-    $cell->setAttribute('class', 'taxonomy-edge-operations');
-    $dropbuttonWrapper = $doc->createElement('div');
-    $dropbuttonWrapper->setAttribute('class', 'dropbutton-wrapper');
+  $index = 0;
+  foreach ($vocabularies as $vocabulary) {
+    $row = $rows->item($index);
+    if ($row !== null) {  // Corrected this line
+      $machine_name = $vocabulary->machine_name;
+      // Create the dropbutton structure
+      $cell = $doc->createElement('td');
+      $cell->setAttribute('class', 'taxonomy-edge-operations');
+      $dropbuttonWrapper = $doc->createElement('div');
+      $dropbuttonWrapper->setAttribute('class', 'dropbutton-wrapper');
 
-    $dropbuttonWidget = $doc->createElement('div');
-    $dropbuttonWidget->setAttribute('class', 'dropbutton-widget');
+      $dropbuttonWidget = $doc->createElement('div');
+      $dropbuttonWidget->setAttribute('class', 'dropbutton-widget');
 
-    $ul = $doc->createElement('ul');
-    $ul->setAttribute('class', 'dropbutton');
+      $ul = $doc->createElement('ul');
+      $ul->setAttribute('class', 'dropbutton');
 
-    // Create list items with links
-    $li_edges = $doc->createElement('li');
-    $li_edges->setAttribute('class', 'rebuild-edges odd first');
-    $a_edges = $doc->createElement('a', t('Rebuild edges'));
-    $a_edges->setAttribute('href', "/admin/structure/taxonomy/rebuild/edges/$machine_name");
-    $li_edges->appendChild($a_edges);
+      // Create list items with links for various operations
+      createListItem($doc, $ul, 'Rebuild edges', "/admin/structure/taxonomy/rebuild/edges/$machine_name", 'rebuild-edges odd first');
+      createListItem($doc, $ul, 'Rebuild order', "/admin/structure/taxonomy/rebuild/order/$machine_name", 'rebuild-order even');
+      createListItem($doc, $ul, 'Rebuild everything', "/admin/structure/taxonomy/rebuild/all/$machine_name", 'rebuild-all odd last');
 
-    $li_order = $doc->createElement('li');
-    $li_order->setAttribute('class', 'rebuild-order even');
-    $a_order = $doc->createElement('a', t('Rebuild order'));
-    $a_order->setAttribute('href', "/admin/structure/taxonomy/rebuild/order/$machine_name");
-    $li_order->appendChild($a_order);
+      // Assemble the structure
+      $dropbuttonWidget->appendChild($ul);
+      $dropbuttonWrapper->appendChild($dropbuttonWidget);
+      $cell->appendChild($dropbuttonWrapper);
+      $row->appendChild($cell);
 
-    $li_all = $doc->createElement('li');
-    $li_all->setAttribute('class', 'rebuild-all odd last');
-    $a_all = $doc->createElement('a', t('Rebuild everything'));
-    $a_all->setAttribute('href', "/admin/structure/taxonomy/rebuild/all/$machine_name");
-    $li_all->appendChild($a_all);
-
-    // Append list items to the list
-    $ul->appendChild($li_edges);
-    $ul->appendChild($li_order);
-    $ul->appendChild($li_all);
-
-    // Build the structure
-    $dropbuttonWidget->appendChild($ul);
-    $dropbuttonWrapper->appendChild($dropbuttonWidget);
-    $cell->appendChild($dropbuttonWrapper);
-    $row->appendChild($cell);
+      $index++;
+    }
   }
 
   return $doc->saveHTML();
 }
+
+function createListItem($doc, $ul, $text, $href, $class) {
+  $li = $doc->createElement('li');
+  $li->setAttribute('class', $class);
+  $a = $doc->createElement('a', t($text));
+  $a->setAttribute('href', $href);
+  $li->appendChild($a);
+  $ul->appendChild($li);
+}
+
+
 
 
 
