@@ -58,7 +58,7 @@ function taxonomy_edge_drush_help($section) {
  *   The vocabulary ID, FALSE if not found.
  */
 function _drush_taxonomy_edge_get_vid($name) {
-  $vocabulary = taxonomy_vocabulary_machine_name_load($name);
+  $vocabulary = taxonomy_vocabulary_load($name);
   if (!$vocabulary) {
     return drush_set_error(dt('Vocabulary: !name not found!.', array('!name' => $name)));
   }

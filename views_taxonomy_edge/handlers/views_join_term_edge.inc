@@ -9,7 +9,7 @@ class views_join_term_edge extends views_join {
    * Override build_join.
    */
   function build_join($select_query, $table, $view_query) {
-    $this->extra = $table['alias'] . '.vid = ' . $this->left_table . '.vid';
+    $this->extra = $table['alias'] . '.vocabulary = ' . $this->left_table . '.vocabulary';
     $found = FALSE;
 
     // If there's a condition on parent, then let it be unless it's blank.

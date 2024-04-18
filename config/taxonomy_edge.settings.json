@@ -1,9 +1,9 @@
 {
     "_config_name": "taxonomy_edge.settings",
-    "taxonomy_edge_max_depth": "TAXONOMY_EDGE_MAX_DEPTH",
-    "taxonomy_edge_build_realtime": "TAXONOMY_EDGE_BUILD_REALTIME",
-    "taxonomy_edge_static_caching": "TAXONOMY_EDGE_STATIC_CACHING",
-    "taxonomy_edge_optimized_get_tree": "TAXONOMY_EDGE_OPTIMIZED_GET_TREE",
-    "taxonomy_edge_override_term_pages": "",
+    "taxonomy_edge_max_depth": "100",
+    "taxonomy_edge_build_realtime": 0,
+    "taxonomy_edge_static_caching": 0,
+    "taxonomy_edge_optimized_get_tree": 0,
+    "taxonomy_edge_override_term_pages": 1,
     "taxonomy_edge_exclude_root": true
 }

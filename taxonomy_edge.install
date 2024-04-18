@@ -65,12 +65,12 @@ function taxonomy_edge_schema() {
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
-      'vid' => array(
-        'description' => 'Vocabulary ID',
-        'type' => 'int',
-        'unsigned' => TRUE,
+      'vocabulary' => array(
+        'type' => 'varchar',
+        'length' => 255,
         'not null' => TRUE,
-        'default' => 0,
+        'default' => '',
+        'description' => 'The vocabulary machine name to which this term is assigned.',
       ),
       'tid' => array(
         'description' => 'Term ID',
@@ -96,10 +96,10 @@ function taxonomy_edge_schema() {
     ),
     'primary key' => array('eid'),
     'indexes' => array(
-      'idx_update' => array('vid', 'distance', 'parent'),
-      'idx_depth' => array('parent', 'distance', 'vid'),
+      'idx_update' => array('vocabulary', 'distance', 'parent'),
+      'idx_depth' => array('parent', 'distance', 'vocabulary'),
       'idx_term' => array('tid', 'distance'),
-      'idx_tree' => array('parent', 'vid', 'distance'),
+      'idx_tree' => array('parent', 'vocabulary', 'distance'),
     ),
   );
 
@@ -109,13 +109,14 @@ function taxonomy_edge_schema() {
       'oid' => array(
         'description' => 'Order ID',
         'type' => 'serial',
-      ),
-      'vid' => array(
-        'description' => 'Vocabulary ID',
-        'type' => 'int',
-        'unsigned' => FALSE,
         'not null' => TRUE,
-        'default' => 0,
+      ),
+      'vocabulary' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The vocabulary machine name to which this term is assigned.',
       ),
       'parent' => array(
         'description' => 'Parent term ID',
@@ -134,7 +135,7 @@ function taxonomy_edge_schema() {
     ),
     'primary key' => array('oid'),
     'indexes' => array(
-      'idx_order' => array('vid', 'parent'),
+      'idx_order' => array('vocabulary', 'parent'),
       'idx_edge' => array('eid'),
     ),
   );

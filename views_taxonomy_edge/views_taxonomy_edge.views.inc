@@ -24,14 +24,14 @@ function views_taxonomy_edge_views_data() {
       'handler' => 'views_join_term_edge',
     ),
     'taxonomy_vocabulary' => array(
-      'left_field' => 'vid',
-      'field' => 'vid',
+      'left_field' => 'vocabulary',
+      'field' => 'vocabulary',
       'type' => 'INNER',
     ),
   );
 
   // Columns.
-  $data['taxonomy_term_edge']['vid'] = array(
+  $data['taxonomy_term_edge']['vocabulary'] = array(
     'title' => t('Vocabulary ID'), // The item it appears as on the UI,
     'help' => t('The taxonomy vocabulary ID'),
   );

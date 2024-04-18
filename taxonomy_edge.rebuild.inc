@@ -7,15 +7,15 @@
 /**
  * Start batch job for rebuild of edges.
  */
-function taxonomy_edge_rebuild_edges_batch($vids) {
+function taxonomy_edge_rebuild_edges_batch($vocabularies) {
   $batch = array(
     'finished' => 'taxonomy_edge_rebuild_finished',
     'file' => backdrop_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
     'title' => t('Rebuilding taxonomy edges'),
     'init_message' => t('Rebuilding taxonomy edges'),
   );
-  foreach ($vids as $vid) {
-    $batch['operations'][] = array('taxonomy_edge_rebuild_edges', array($vid));
+  foreach ($vocabularies as $vocabulary) {
+    $batch['operations'][] = array('taxonomy_edge_rebuild_edges', array($vocabulary));
   }
   batch_set($batch);
 }
@@ -23,32 +23,34 @@ function taxonomy_edge_rebuild_edges_batch($vids) {
 /**
  * Start batch job for rebuild of order.
  */
-function taxonomy_edge_rebuild_order_batch($vids) {
+function taxonomy_edge_rebuild_order_batch($vocabularies) {
   $batch = array(
     'finished' => 'taxonomy_edge_rebuild_finished',
     'file' => backdrop_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
     'title' => t('Rebuilding taxonomy edge order'),
     'init_message' => t('Rebuilding taxonomy edge order'),
   );
-  foreach ($vids as $vid) {
-    $batch['operations'][] = array('taxonomy_edge_rebuild_order', array($vid));
+  foreach ($vocabularies as $vocabulary) {
+    $batch['operations'][] = array('taxonomy_edge_rebuild_order', array
+    ($vocabulary));  // Correct function call
   }
   batch_set($batch);
 }
 
+
 /**
  * Start batch job for rebuild of edges and order.
  */
-function taxonomy_edge_rebuild_all_batch($vids) {
+function taxonomy_edge_rebuild_all_batch($vocabularies) {
   $batch = array(
     'finished' => 'taxonomy_edge_rebuild_finished',
     'file' => backdrop_get_path('module', 'taxonomy_edge') . '/taxonomy_edge.rebuild.inc',
     'title' => t('Rebuilding taxonomy edges and order'),
     'init_message' => t('Rebuilding taxonomy edges and order'),
   );
-  foreach ($vids as $vid) {
-    $batch['operations'][] = array('taxonomy_edge_rebuild_edges', array($vid));
-    $batch['operations'][] = array('taxonomy_edge_rebuild_order', array($vid));
+  foreach ($vocabularies as $vocabulary) {
+    $batch['operations'][] = array('taxonomy_edge_rebuild_edges', array($vocabulary));
+    $batch['operations'][] = array('taxonomy_edge_rebuild_order', array($vocabulary));
   }
   batch_set($batch);
 }
@@ -76,19 +78,18 @@ function taxonomy_edge_rebuild_finished($success, $results, $operations) {
  * @return integer
  *   Total number of rows inserted.
  */
-function taxonomy_edge_rebuild_edges($vid, &$context) {
+function taxonomy_edge_rebuild_edges($vocabulary_name, &$context) {
   $depth = 0;
   $max_depth = config_get('taxonomy_edge.settings', 'taxonomy_edge_max_depth');
 
-  $vocabulary = taxonomy_vocabulary_load($vid);
+  $vocabulary = taxonomy_vocabulary_load($vocabulary_name);
   if (!$vocabulary) {
     $context['success'] = FALSE;
-    $context['results'][] = t('Invalid vocabulary ID: %vid', array('%vid' => $vid));
+    $context['results'][] = t('Invalid vocabulary: %name', array('%name' => $vocabulary_name));
     return;
   }
 
-  // Acquire lock to avoid conflicts with queue.
-  if (!lock_acquire('taxonomy_edge_rebuild_edges_' . $vid)) {
+  if (!lock_acquire('taxonomy_edge_rebuild_edges_' . $vocabulary->machine_name)) {
     $context['success'] = FALSE;
     $context['results'][] = t('Could not acquire lock!');
     return;
@@ -97,42 +98,29 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
   $time = microtime(TRUE);
   set_time_limit(86400);
 
-  // Clear the queue, we're rebulding anyways ...
-  $queue = BackdropQueue::get('taxonomy_edge', TRUE);
-  $queue->deleteQueue();
+  db_delete('taxonomy_term_edge')
+    ->condition('vocabulary', $vocabulary->machine_name)
+    ->execute();
 
-  // Please use a proper isolation level, so that transaction provides us with a
-  // snapshot.
-  $tx = db_transaction();
+  $total_rows = 0;
 
-  // Clear out edge data for vocabulary.
-  taxonomy_edge_taxonomy_vocabulary_insert($vocabulary);
-  $total_rows = 1;
-
-  $result = db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
-    SELECT DISTINCT d.vid, h.tid, h.tid, 0
+  $result = db_query("INSERT INTO {taxonomy_term_edge} (vocabulary, tid, parent, distance)
+    SELECT :vocabulary, h.tid, h.tid, 0
     FROM {taxonomy_term_hierarchy} h
     INNER JOIN {taxonomy_term_data} d ON d.tid = h.tid
-    WHERE h.tid <> 0
-    AND h.tid <> h.parent
-    AND d.vid = :vid
-  ", array(':vid' => $vid));
+    WHERE h.tid <> 0 AND h.tid <> h.parent AND d.vocabulary = :vocabulary",
+    array(':vocabulary' => $vocabulary->machine_name));
   $total_rows += $result->rowCount();
 
-  $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
-  $context['finished'] = 0.5;
+  $context['message'] = t('Processed %rows rows at initial depth.', array('%rows' => $total_rows));
 
   while ($max_depth-- > 0) {
-    $result = db_query("INSERT INTO {taxonomy_term_edge} (vid, tid, parent, distance)
-      SELECT e.vid, e.tid, h.parent, e.distance + 1
+    $result = db_query("INSERT INTO {taxonomy_term_edge} (vocabulary, tid, parent, distance)
+      SELECT e.vocabulary, e.tid, h.parent, e.distance + 1
       FROM {taxonomy_term_edge} e
       INNER JOIN {taxonomy_term_hierarchy} h ON h.tid = e.parent
-      INNER JOIN {taxonomy_term_data} d ON d.tid = h.tid
-      WHERE e.distance = :depth
-      AND e.vid = :vid
-      AND h.tid <> 0
-      AND h.tid <> h.parent
-    ", array(':vid' => $vid, ':depth' => $depth));
+      WHERE e.distance = :depth AND e.vocabulary = :vocabulary",
+      array(':vocabulary' => $vocabulary->machine_name, ':depth' => $depth));
 
     $rows = $result->rowCount();
     if ($rows <= 0) {
@@ -140,19 +128,19 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
     }
 
     $depth++;
-
     $total_rows += $rows;
     $context['message'] = t('Processed %rows rows - current depth: %depth', array('%rows' => $total_rows, '%depth' => $depth));
-    $context['finished'] += (1 - $context['finished']) / 2;
   }
-  taxonomy_edge_invalidate_order($vid);
-  lock_release('taxonomy_edge_rebuild_edges_' . $vid);
 
+  lock_release('taxonomy_edge_rebuild_edges_' . $vocabulary->machine_name);
   $context['success'] = TRUE;
   $context['finished'] = 1;
-  $context['results'][] = t('%name rebuilt: %rows processed with depth %depth in %time seconds',
-      array('%rows' => $total_rows, '%depth' => $depth, '%time' => sprintf("%.03f", microtime(TRUE) - $time), '%name' => $vocabulary->name)
-  );
+  $context['results'][] = t('%name rebuilt: %rows processed with depth %depth in %time seconds', array(
+    '%name' => $vocabulary->name,
+    '%rows' => $total_rows,
+    '%depth' => $depth,
+    '%time' => sprintf("%.03f", microtime(TRUE) - $time)
+  ));
 
   return $total_rows;
 }
@@ -160,43 +148,59 @@ function taxonomy_edge_rebuild_edges($vid, &$context) {
 /**
  * Rebuild the sorted tree.
  */
-function taxonomy_edge_rebuild_order($vid, &$context) {
-  $vocabulary = taxonomy_vocabulary_load($vid);
+function taxonomy_edge_rebuild_order($vocabulary_name, &$context) {
+  $vocabulary = taxonomy_vocabulary_load($vocabulary_name);
+  dpm($vocabulary);
   if (!$vocabulary) {
     $context['success'] = FALSE;
-    $context['message'] = t('Invalid vocabulary ID: %vid', array('%vid' => $vid));
+    $context['message'] = t('Invalid vocabulary: %vocabulary', array('%vocabulary' => $vocabulary_name));
+    watchdog('taxonomy_edge', 'Failed to load vocabulary with name: @name', array('@name' => $vocabulary_name), WATCHDOG_ERROR);
     return;
   }
+
+  watchdog('taxonomy_edge', 'Loaded vocabulary @name for rebuilding order.', array('@name' => $vocabulary->name), WATCHDOG_DEBUG);
 
   // Acquire lock.
-  if (!lock_acquire('taxonomy_edge_rebuild_edges_' . $vid)) {
+  if (!lock_acquire('taxonomy_edge_rebuild_edges_' . $vocabulary->machine_name)) {
     $context['success'] = FALSE;
     $context['message'] = t('Could not acquire lock!');
+    watchdog('taxonomy_edge', 'Lock acquisition failed for vocabulary @name.', array('@name' => $vocabulary->machine_name), WATCHDOG_WARNING);
     return;
   }
 
+  watchdog('taxonomy_edge', 'Lock acquired for vocabulary @name, starting transaction.', array('@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
   $tx = db_transaction();
 
   $time = microtime(TRUE);
-  taxonomy_edge_invalidate_order($vid);
-  db_query("DELETE FROM {taxonomy_term_edge_order} WHERE vid = :vid", array(':vid' => $vid));
+  taxonomy_edge_invalidate_order($vocabulary->machine_name);
+  watchdog('taxonomy_edge', 'Order invalidated for vocabulary @name.', array('@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
 
-  $total_rows = db_query("INSERT INTO {taxonomy_term_edge_order} (vid, parent, eid)
-    SELECT op.vid, op.parent, op.eid
+  db_query("DELETE FROM {taxonomy_term_edge_order} WHERE vocabulary = :vocabulary", array(':vocabulary' => $vocabulary->machine_name));
+  watchdog('taxonomy_edge', 'Deleted existing order entries for vocabulary @name.', array('@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
+
+  $total_rows = db_query("INSERT INTO {taxonomy_term_edge_order} (vocabulary, parent, eid)
+    SELECT op.vocabulary, op.parent, op.eid
     FROM {taxonomy_term_edge} op
-    WHERE op.vid = :vid
+    WHERE op.vocabulary = :vocabulary
     ORDER BY " . _taxonomy_edge_generate_term_path_query('op.tid'),
-    array(':vid' => $vid))->rowCount();
+    array(':vocabulary' => $vocabulary->machine_name))->rowCount();
+  watchdog('taxonomy_edge', 'Inserted @total_rows new order entries for vocabulary @name.', array('@total_rows' => $total_rows, '@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
 
   $context['success'] = TRUE;
   $context['finished'] = 1;
   $context['results'][] = t('%name sorted: %rows edges in %time seconds',
-      array('%rows' => $total_rows, '%time' => sprintf("%.03f", microtime(TRUE) - $time), '%name' => $vocabulary->name)
+    array('%rows' => $total_rows, '%time' => sprintf("%.03f", microtime(TRUE) - $time), '%name' => $vocabulary->name)
   );
 
   db_insert('taxonomy_term_edge_order')
-    ->fields(array('vid' => -$vid))
+    ->fields(array('vocabulary' => $vocabulary->machine_name))
     ->execute();
+  watchdog('taxonomy_edge', 'Rebuild order completed for vocabulary @name, total rows: @rows.', array('@name' => $vocabulary->machine_name, '@rows' => $total_rows), WATCHDOG_INFO);
 
-  lock_release('taxonomy_edge_rebuild_edges_' . $vid);
+  lock_release('taxonomy_edge_rebuild_edges_' . $vocabulary->machine_name);
+  watchdog('taxonomy_edge', 'Lock released for vocabulary @name.', array('@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
 }
+
+
+
+

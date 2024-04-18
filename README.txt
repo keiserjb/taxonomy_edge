@@ -46,10 +46,10 @@ FROM taxonomy_term_edge e
 JOIN taxonomy_term_edge e2 ON e2.tid = e.tid AND e2.distance = e.distance - 1 AND e2.parent <> e.parent
 WHERE e.tid = 14
 AND e.parent = 0
-AND e.vid = e2.vid
+AND e.vocabulary = e2.vocabulary
 
 
-Generate a list of materialized paths for each term in vocabulary vid:1, in the correct order:
+Generate a list of materialized paths for each term in vocabulary vocabulary:1, in the correct order:
 
 SELECT d2.*, e2.parent, e2.distance,
 (
@@ -60,7 +60,7 @@ SELECT GROUP_CONCAT(d.weight + 1500, '    ', d.name ORDER BY e.distance DESC SEP
 ) AS sort_path
 FROM taxonomy_term_edge e2
 JOIN taxonomy_term_data d ON d.tid = e2.tid
-WHERE e2.vid = 1
+WHERE e2.vocabulary = 1
 AND e2.parent = 0
 ORDER BY sort_path;
 

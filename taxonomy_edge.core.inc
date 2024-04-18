@@ -16,8 +16,8 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
   $static_cache = $config->get('taxonomy_edge_static_caching');
 
   // @todo Optimize this. Currently we cannot use the static cache when using
-//       parent, because it's expected that the entire vocabulary is present
-//       in the static cache.
+  //       parent, because it's expected that the entire vocabulary is present
+  //       in the static cache.
   $static_cache = $static_cache && !$parent;
 
   if ($static_cache) {
@@ -49,10 +49,10 @@ function taxonomy_edge_get_tree_generic($vid, $parent = 0, $max_depth = NULL, $l
 
     if ($exclude_root && $parent) {
       $subquery = db_select('taxonomy_term_edge', 'e')
-                    ->fields('e', array('tid'))
-                    ->condition('e.vid', $vid)
-                    ->condition('e.parent', $parent)
-                    ->condition('e.distance', 0, '>');
+        ->fields('e', array('tid'))
+        ->condition('e.vid', $vid)
+        ->condition('e.parent', $parent)
+        ->condition('e.distance', 0, '>');
       $query->condition('t.tid', $subquery, 'IN');
     }
 

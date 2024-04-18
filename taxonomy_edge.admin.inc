@@ -91,26 +91,32 @@ function taxonomy_edge_system_settings_form_submit_custom($form, &$form_state) {
 /**
  * Confirmation for rebuilding trees.
  */
+/**
+ * Confirmation for rebuilding trees.
+ */
 function taxonomy_edge_rebuild_page_confirm($form, &$form_state, $type, $vocabulary) {
   $form = array();
   if (!empty($vocabulary)) {
-    $vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary);
+    $vocabulary = taxonomy_vocabulary_load($vocabulary);
+    if (!$vocabulary) {
+      backdrop_set_message(t('Invalid vocabulary specified.'), 'error');
+      backdrop_goto('admin/structure/taxonomy');
+    }
 
-    if (!lock_may_be_available('taxonomy_edge_rebuild_' . $type . '_' . $vocabulary->vid)) {
+    if (!lock_may_be_available('taxonomy_edge_rebuild_' . $type . '_' . $vocabulary->machine_name)) {
       backdrop_set_message(t('Rebuild already in progress'), 'warning');
-      backdrop_goto();
+      backdrop_goto('admin/structure/taxonomy');
     }
 
     $form['vocabulary'] = array(
       '#type' => 'value',
-      '#value' => $vocabulary,
+      '#value' => $vocabulary->machine_name
     );
     $msg = t('Are you sure you want to rebuild %type for vocabulary %name?', array(
       '%type' => $type,
-      '%name' => $vocabulary->name,
+      '%name' => $vocabulary->name
     ));
-  }
-  else {
+  } else {
     $msg = t('Are you sure you want to rebuild %type for all vocabularies?', array(
       '%type' => $type,
     ));
@@ -118,10 +124,12 @@ function taxonomy_edge_rebuild_page_confirm($form, &$form_state, $type, $vocabul
 
   $form['type'] = array(
     '#type' => 'value',
-    '#value' => $type,
+    '#value' => $type
   );
   return confirm_form($form, $msg, 'admin/structure/taxonomy');
 }
+
+
 
 /**
  * Submit callback; rebuild tree.
@@ -132,13 +140,13 @@ function taxonomy_edge_rebuild_page_confirm_submit($form, &$form_state) {
   $form_state['redirect'] = 'admin/structure/taxonomy';
   module_load_include('rebuild.inc', 'taxonomy_edge');
 
-  if (!empty($form_state['values']['vocabulary']->vid)) {
-    $vids = array($form_state['values']['vocabulary']->vid);
+  if (!empty($form_state['values']['vocabulary']->machine_name)) {
+    $vids = array($form_state['values']['vocabulary']->machine_name);
   }
   else {
     $vocabularies = taxonomy_get_vocabularies();
     foreach ($vocabularies as $vocabulary) {
-      $vids[] = $vocabulary->vid;
+      $vids[] = $vocabulary->machine_name;
     }
   }
 
