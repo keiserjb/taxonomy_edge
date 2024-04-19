@@ -793,7 +793,7 @@ function taxonomy_edge_is_build_realtime($vocabulary) {
 function taxonomy_edge_is_order_valid($vocabulary, $reset = FALSE) {
   static $valid_orders = array();
   if ($reset || !isset($valid_orders[$vocabulary])) {
-    $valid_orders[$vocabulary] = db_query_range("SELECT 1 FROM {taxonomy_term_edge_order} WHERE vocabulary = :vocabulary", 0, 1, array(':vocabulary' => -$vocabulary))->fetchField();
+    $valid_orders[$vocabulary] = db_query_range("SELECT 1 FROM {taxonomy_term_edge_order} WHERE vocabulary = :vocabulary", 0, 1, array(':vocabulary' => $vocabulary))->fetchField();
   }
   return $valid_orders[$vocabulary];
 }
