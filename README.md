@@ -1,41 +1,42 @@
-Description
------------
+# Taxonomy Edge
 
 Selecting all children of a given taxonomy term can be a pain.
 This module makes it easier to do this, by maintaining a complete list of edges
 for each term using the adjecency matrix graph theory:
   http://en.wikipedia.org/wiki/Adjacency_matrix
 
-Visit the project page:
-  http://drupal.org/project/taxonomy_edge
+## Installation
 
+- Install this module using the [official Backdrop CMS instructions](https://backdropcms.org/guide/modules).
 
-Requirements
-------------
-Taxonomy module (and the Views module for the Views Taxonomy Edge module)
+## Maintenance
 
-
-Installation
-------------
-Place in modules folder and enable it from /admin/build/modules
-
-Apply the core patch if you like (or use the Core Override module at your own risk :-)):
-%> cd /path/to/drupal
-%> patch -p1 < sites/all/modules/taxonomy_edge/taxonomy-<drupal-version>.patch
-
-
-
-Maintenance
------------
 Rebuild edges from /admin/content/taxonomy/edge
 
 Edges can also be rebuild through cron if a hook_cronapi() compatible cron module is installed (Elysia Cron, Ultimate Cron, etc.)
 
 Rebuilding of edges can be necessary if the table gets out of sync.
 
+## Issues
 
-SQL
-------
+Bugs and Feature requests should be reported in the [Issue Queue](https://github.com/backdrop-contrib/shs/issues)
+
+## Current Maintainers
+
+- [Justin Keiser](https://github.com/keiserjb)
+- Co-maintainers desired
+
+## Credits
+
+- Port to Backdrop by [Justin Keiser](https://github.com/keiserjb)
+- Maintained and created for Drupal by [Thomas Gielfeldt](https://www.drupal.org/u/gielfeldt)
+
+## License
+
+This project is GPL v2 software. See the LICENSE.txt file in this directory for
+complete text.
+
+## SQL
 
 The following select statements can be used as help or inspiration to use the taxonomy_term_edge table:
 
@@ -47,7 +48,6 @@ JOIN taxonomy_term_edge e2 ON e2.tid = e.tid AND e2.distance = e.distance - 1 AN
 WHERE e.tid = 14
 AND e.parent = 0
 AND e.vocabulary = e2.vocabulary
-
 
 Generate a list of materialized paths for each term in vocabulary vocabulary:1, in the correct order:
 
@@ -64,20 +64,16 @@ WHERE e2.vocabulary = 1
 AND e2.parent = 0
 ORDER BY sort_path;
 
-
 Get all parents of a term tid:12
 
 SELECT * FROM taxonomy_term_edge WHERE tid = 12 AND distance > 0;
-
 
 Get all children of a term tid:12
 
 SELECT * FROM taxonomy_term_edge WHERE parent = 12;
 
+## Misc.
 
-
-Misc.
------
 Other popular alternatives to the adjecency matrix model are the nested set and materialized path.
 
 Nested set (http://en.wikipedia.org/wiki/Nested_set_model):
