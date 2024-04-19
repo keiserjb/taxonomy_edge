@@ -150,33 +150,24 @@ function taxonomy_edge_rebuild_edges($vocabulary_name, &$context) {
  */
 function taxonomy_edge_rebuild_order($vocabulary_name, &$context) {
   $vocabulary = taxonomy_vocabulary_load($vocabulary_name);
-  dpm($vocabulary);
   if (!$vocabulary) {
     $context['success'] = FALSE;
     $context['message'] = t('Invalid vocabulary: %vocabulary', array('%vocabulary' => $vocabulary_name));
-    watchdog('taxonomy_edge', 'Failed to load vocabulary with name: @name', array('@name' => $vocabulary_name), WATCHDOG_ERROR);
     return;
   }
-
-  watchdog('taxonomy_edge', 'Loaded vocabulary @name for rebuilding order.', array('@name' => $vocabulary->name), WATCHDOG_DEBUG);
 
   // Acquire lock.
   if (!lock_acquire('taxonomy_edge_rebuild_edges_' . $vocabulary->machine_name)) {
     $context['success'] = FALSE;
     $context['message'] = t('Could not acquire lock!');
-    watchdog('taxonomy_edge', 'Lock acquisition failed for vocabulary @name.', array('@name' => $vocabulary->machine_name), WATCHDOG_WARNING);
-    return;
   }
 
-  watchdog('taxonomy_edge', 'Lock acquired for vocabulary @name, starting transaction.', array('@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
   $tx = db_transaction();
 
   $time = microtime(TRUE);
   taxonomy_edge_invalidate_order($vocabulary->machine_name);
-  watchdog('taxonomy_edge', 'Order invalidated for vocabulary @name.', array('@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
 
   db_query("DELETE FROM {taxonomy_term_edge_order} WHERE vocabulary = :vocabulary", array(':vocabulary' => $vocabulary->machine_name));
-  watchdog('taxonomy_edge', 'Deleted existing order entries for vocabulary @name.', array('@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
 
   $total_rows = db_query("INSERT INTO {taxonomy_term_edge_order} (vocabulary, parent, eid)
     SELECT op.vocabulary, op.parent, op.eid
@@ -184,7 +175,6 @@ function taxonomy_edge_rebuild_order($vocabulary_name, &$context) {
     WHERE op.vocabulary = :vocabulary
     ORDER BY " . _taxonomy_edge_generate_term_path_query('op.tid'),
     array(':vocabulary' => $vocabulary->machine_name))->rowCount();
-  watchdog('taxonomy_edge', 'Inserted @total_rows new order entries for vocabulary @name.', array('@total_rows' => $total_rows, '@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
 
   $context['success'] = TRUE;
   $context['finished'] = 1;
@@ -195,11 +185,9 @@ function taxonomy_edge_rebuild_order($vocabulary_name, &$context) {
   db_insert('taxonomy_term_edge_order')
     ->fields(array('vocabulary' => $vocabulary->machine_name))
     ->execute();
-  watchdog('taxonomy_edge', 'Rebuild order completed for vocabulary @name, total rows: @rows.', array('@name' => $vocabulary->machine_name, '@rows' => $total_rows), WATCHDOG_INFO);
 
   lock_release('taxonomy_edge_rebuild_edges_' . $vocabulary->machine_name);
-  watchdog('taxonomy_edge', 'Lock released for vocabulary @name.', array('@name' => $vocabulary->machine_name), WATCHDOG_DEBUG);
-}
+  }
 
 
 
